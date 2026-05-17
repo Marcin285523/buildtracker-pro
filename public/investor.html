@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panel Inwestora — BuildTracker Pro</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+</head>
+<body>
+
+<a href="#main" class="skip-link">Przejdź do treści głównej</a>
+
+<div id="investor" class="view">
+  <nav aria-label="Nawigacja główna">
+    <div class="logo" aria-label="BuildTracker Pro">Build<span>Tracker</span><em>Pro</em></div>
+    <div class="nav-right">
+      <span class="nav-user" aria-live="polite">Ładowanie danych...</span>
+      <button class="btn-nav" onclick="logout()">Wyloguj</button>
+    </div>
+  </nav>
+
+  <main class="main-content" id="main">
+    
+    <div class="project-header" id="project-header-view">
+      <div style="flex: 1;">
+        <h1 class="project-title" id="display-project-name">Brak aktywnego projektu</h1>
+        <p class="project-status" id="display-project-desc" style="margin-bottom: 10px;">
+          Dodaj nazwę i opis swojej inwestycji, aby rozpocząć.
+        </p>
+        <div style="display: flex; gap: 10px; margin-top: 15px;">
+            <button class="btn-demo" id="btn-edit-project" style="max-width: 200px;">Edytuj dane projektu</button>
+            <button class="btn-primary" id="btn-download-zip" style="max-width: 200px; background-color: #16a34a; border-color: #16a34a;">📦 Pobierz jako ZIP</button>
+        </div>
+      </div>
+      
+      <div class="access-box" aria-label="Link dostępu dla wykonawcy">
+        <div class="access-box-label">Dostęp dla Wykonawcy</div>
+        <div class="access-url-row">
+          <div class="access-url" id="contractor-link" aria-label="Adres URL dostępu">Zapisz projekt, aby wygenerować link...</div>
+          <button class="btn-copy" onclick="copyLink()" aria-label="Skopiuj link do schowka">Kopiuj</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="project-edit-form" style="display: none; background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border-card); margin-bottom: 2rem;">
+      <h2 style="font-size: 16px; margin-bottom: 1rem;">Ustawienia Inwestycji</h2>
+      <div class="form-group">
+        <label>Nazwa inwestycji</label>
+        <input type="text" id="input-project-name" placeholder="np. Budowa Domu - ul. Wiosenna 12">
+      </div>
+      <div class="form-group">
+        <label>Notatka / Opis dla wykonawcy</label>
+        <textarea id="input-project-desc" placeholder="Wpisz najważniejsze informacje..."></textarea>
+      </div>
+      <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+        <div>
+            <button class="btn-primary" id="btn-save-project" style="max-width: 200px;">Zapisz zmiany</button>
+            <button class="btn-demo" id="btn-cancel-project" style="max-width: 150px; margin-left: 10px;">Anuluj</button>
+        </div>
+        <button class="btn-danger-outline" id="btn-delete-project">Usuń projekt całkowicie</button>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <aside aria-label="Panel boczny">
+        <div class="sidebar">
+          
+          <div class="sidebar-card">
+            <h2>Dokumentacja i Plany</h2>
+            <div id="documents-list">
+              <div class="empty-list">Brak wgranych dokumentów.</div>
+            </div>
+            <input type="file" id="file-upload" style="display: none;">
+            <button class="btn-add" id="btn-upload-doc" aria-label="Wgraj nowy dokument">+ Wgraj nowy plik</button>
+          </div>
+
+          <div class="sidebar-card">
+            <h2>Lista materiałów</h2>
+            <div id="materials-list">
+              <div class="empty-list">Lista jest pusta.</div>
+            </div>
+            <div class="mat-input-row">
+              <input type="text" id="mat-name" placeholder="Nazwa" style="flex: 2;">
+              <input type="text" id="mat-qty" placeholder="Ilość" style="flex: 1;">
+            </div>
+            <button class="btn-add" id="btn-add-material">+ Dodaj materiał</button>
+          </div>
+          
+        </div>
+      </aside>
+
+      <section aria-label="Raporty z budowy">
+        <h2 class="section-title">Raporty z budowy (Oś czasu)</h2>
+        <div id="timeline" class="timeline-track" role="list">
+            <p style="color: var(--text-muted); font-size: 14px;">Brak raportów. Zapisz projekt, aby Wykonawca mógł zacząć wysyłać raporty.</p>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+  import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
+  // Dodano getDocs do importów
+  import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, orderBy, onSnapshot, getDocs } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+  import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-storage.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCn3A18LpsZquFzOahvvuySUILNXZM_kwk",
+    authDomain: "btpro-6fb00.firebaseapp.com",
+    projectId: "btpro-6fb00",
+    storageBucket: "btpro-6fb00.firebasestorage.app",
+    messagingSenderId: "716860697893",
+    appId: "1:716860697893:web:42f51baccb483142853ecc"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const storage = getStorage(app);
+
+  let currentUser = null;
+  let currentProjectData = null;
+  let unsubscribeReports = null; 
+
+  const headerView = document.getElementById('project-header-view');
+  const editForm = document.getElementById('project-edit-form');
+  const displayName = document.getElementById('display-project-name');
+  const displayDesc = document.getElementById('display-project-desc');
+  const inputName = document.getElementById('input-project-name');
+  const inputDesc = document.getElementById('input-project-desc');
+  const contractorLink = document.getElementById('contractor-link');
+  const materialsListDiv = document.getElementById('materials-list');
+  const documentsListDiv = document.getElementById('documents-list');
+  const timelineDiv = document.getElementById('timeline');
+
+  onAuthStateChanged(auth, async (user) => {
+    if (user) {
+      currentUser = user;
+      const userDoc = await getDoc(doc(db, "users", user.uid));
+      if (userDoc.exists()) {
+        document.querySelector('.nav-user').textContent = `Zalogowany: ${userDoc.data().name} (Inwestor)`;
+      }
+      loadProjectData();
+    } else {
+      window.location.href = 'index.html';
+    }
+  });
+
+  async function loadProjectData() {
+    const projectDoc = await getDoc(doc(db, "projects", currentUser.uid));
+    
+    if (projectDoc.exists()) {
+      currentProjectData = projectDoc.data();
+      displayName.textContent = currentProjectData.name;
+      displayDesc.textContent = currentProjectData.description;
+      inputName.value = currentProjectData.name;
+      inputDesc.value = currentProjectData.description;
+      
+      const currentUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/'));
+      contractorLink.textContent = `${currentUrl}/contractor.html?projekt=${currentUser.uid}`;
+      
+      renderMaterials(currentProjectData.materials || []);
+      renderDocuments(currentProjectData.documents || []);
+
+      if (unsubscribeReports) unsubscribeReports(); 
+      const q = query(collection(db, `projects/${currentUser.uid}/reports`), orderBy("createdAt", "desc"));
+      unsubscribeReports = onSnapshot(q, (snapshot) => {
+        if (snapshot.empty) {
+          timelineDiv.innerHTML = '<p style="color: var(--text-muted); font-size: 14px;">Brak raportów. Kiedy Wykonawca doda pierwszy raport, pojawi się on tutaj.</p>';
+          return;
+        }
+        
+        timelineDiv.innerHTML = snapshot.docs.map(docSnapshot => {
+          const r = docSnapshot.data();
+          const date = r.createdAt?.toDate().toLocaleString() || 'Przed chwilą';
+          
+          let imagesHtml = '';
+          
+          if (r.images && r.images.length > 0) {
+            imagesHtml = `<div class="report-images" style="margin-top: 10px;">` + r.images.map(img => `
+                <div style="position: relative; display: inline-block; margin-right: 10px; margin-bottom: 10px;">
+                    <a href="${img.url}" target="_blank"><img src="${img.url}" class="report-img" alt="Załącznik"></a>
+                    <span style="position: absolute; bottom: 8px; right: 8px; background: ${img.tag === 'Dokument' ? '#b91c1c' : '#1d4ed8'}; color: white; padding: 3px 8px; font-size: 10px; border-radius: 4px; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,0.3);">${img.tag}</span>
+                </div>
+            `).join('') + `</div>`;
+          } else if (r.imageUrls && r.imageUrls.length > 0) {
+            imagesHtml = `<div class="report-images" style="margin-top: 10px;">` + r.imageUrls.map(url => `<a href="${url}" target="_blank"><img src="${url}" class="report-img" alt="Zdjęcie z budowy" style="margin-right: 10px; margin-bottom: 10px;"></a>`).join('') + `</div>`;
+          } else if (r.imageUrl) {
+            imagesHtml = `<div class="report-images" style="margin-top: 10px;"><a href="${r.imageUrl}" target="_blank"><img src="${r.imageUrl}" class="report-img" alt="Zdjęcie z budowy"></a></div>`;
+          }
+
+          return `
+            <div class="report-card">
+              <div class="report-meta">
+                <span class="report-author">👤 ${r.author}</span>
+                <span>📅 ${date}</span>
+              </div>
+              <div class="report-content">${r.text}</div>
+              ${imagesHtml}
+            </div>
+          `;
+        }).join('');
+      });
+
+    } else {
+      currentProjectData = null;
+      displayName.textContent = "Brak aktywnego projektu";
+      displayDesc.textContent = "Dodaj nazwę i opis swojej inwestycji, aby rozpocząć.";
+      inputName.value = "";
+      inputDesc.value = "";
+      contractorLink.textContent = "Zapisz projekt, aby wygenerować link...";
+      renderMaterials([]);
+      renderDocuments([]);
+      
+      if (unsubscribeReports) { unsubscribeReports(); unsubscribeReports = null; }
+      timelineDiv.innerHTML = '<p style="color: var(--text-muted); font-size: 14px;">Brak raportów. Zapisz projekt, aby Wykonawca mógł zacząć wysyłać raporty.</p>';
+    }
+  }
+
+  // --- MATERIAŁY ---
+  function renderMaterials(materialsArray) {
+    materialsListDiv.innerHTML = '';
+    if (materialsArray.length === 0) {
+      materialsListDiv.innerHTML = '<div class="empty-list">Lista jest pusta.</div>';
+      return;
+    }
+    materialsArray.forEach((mat, index) => {
+      const row = document.createElement('div');
+      row.className = 'mat-row';
+      row.innerHTML = `<span class="mat-name">${mat.name}</span><div><span class="mat-qty">${mat.quantity}</span><button class="btn-del" onclick="deleteMaterial(${index})">✖</button></div>`;
+      materialsListDiv.appendChild(row);
+    });
+  }
+
+  document.getElementById('btn-add-material').addEventListener('click', async () => {
+    if (!currentProjectData) { window.showToast('⚠ Najpierw zapisz projekt!', 'error'); return; }
+    const name = document.getElementById('mat-name').value.trim();
+    const qty = document.getElementById('mat-qty').value.trim();
+    if (!name || !qty) return;
+    const newMats = currentProjectData.materials || [];
+    newMats.push({ name, quantity: qty });
+    await updateDoc(doc(db, "projects", currentUser.uid), { materials: newMats });
+    document.getElementById('mat-name').value = ''; document.getElementById('mat-qty').value = '';
+    loadProjectData();
+  });
+
+  window.deleteMaterial = async function(index) {
+    const newMats = currentProjectData.materials;
+    newMats.splice(index, 1);
+    await updateDoc(doc(db, "projects", currentUser.uid), { materials: newMats });
+    loadProjectData();
+  };
+
+  // --- DOKUMENTY ---
+  function renderDocuments(docsArray) {
+    documentsListDiv.innerHTML = '';
+    if (docsArray.length === 0) {
+      documentsListDiv.innerHTML = '<div class="empty-list">Brak dokumentów.</div>';
+      return;
+    }
+    docsArray.forEach((docItem, index) => {
+      const row = document.createElement('div');
+      row.className = 'doc-item';
+      row.innerHTML = `
+        <div class="doc-info">
+            <div class="doc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+            <span class="doc-name">${docItem.name}</span>
+        </div>
+        <div>
+            <a href="${docItem.url}" target="_blank" style="font-size: 12px; color: var(--primary);">Otwórz</a>
+            <button class="btn-del" onclick="deleteDocument(${index})">✖</button>
+        </div>
+      `;
+      documentsListDiv.appendChild(row);
+    });
+  }
+
+  document.getElementById('btn-upload-doc').addEventListener('click', () => {
+    if (!currentProjectData) { window.showToast('⚠ Najpierw zapisz projekt!', 'error'); return; }
+    document.getElementById('file-upload').click();
+  });
+
+  document.getElementById('file-upload').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    window.showToast('Wysyłanie pliku... ⏳');
+    try {
+      const path = `projects/${currentUser.uid}/${Date.now()}_${file.name}`;
+      const sRef = ref(storage, path);
+      await uploadBytes(sRef, file);
+      const url = await getDownloadURL(sRef);
+      const newDocs = currentProjectData.documents || [];
+      newDocs.push({ name: file.name, url: url, storagePath: path }); 
+      await updateDoc(doc(db, "projects", currentUser.uid), { documents: newDocs });
+      window.showToast('✓ Plik wgrany!');
+      loadProjectData();
+    } catch (err) { window.showToast('⚠ Błąd wgrywania.', 'error'); }
+  });
+
+  window.deleteDocument = async function(index) {
+    if (!confirm("Czy na pewno usunąć ten plik?")) return;
+    const docToDelete = currentProjectData.documents[index];
+    try {
+      if (docToDelete.storagePath) {
+        const sRef = ref(storage, docToDelete.storagePath);
+        await deleteObject(sRef);
+      }
+      const newDocs = currentProjectData.documents;
+      newDocs.splice(index, 1);
+      await updateDoc(doc(db, "projects", currentUser.uid), { documents: newDocs });
+      window.showToast('✓ Plik usunięty.');
+      loadProjectData();
+    } catch (err) { console.error(err); window.showToast('⚠ Błąd usuwania.', 'error'); }
+  };
+
+  // --- ZARZĄDZANIE PROJEKTEM ---
+  document.getElementById('btn-edit-project').addEventListener('click', () => {
+    headerView.style.display = 'none'; editForm.style.display = 'block';
+  });
+
+  document.getElementById('btn-cancel-project').addEventListener('click', () => {
+    editForm.style.display = 'none'; headerView.style.display = 'flex';
+  });
+
+  document.getElementById('btn-save-project').addEventListener('click', async () => {
+    const name = inputName.value.trim();
+    const desc = inputDesc.value.trim();
+    if(!name) return;
+    try {
+      await setDoc(doc(db, "projects", currentUser.uid), {
+        name, description: desc, investorId: currentUser.uid,
+        materials: currentProjectData?.materials || [],
+        documents: currentProjectData?.documents || [],
+        updatedAt: new Date()
+      });
+      window.showToast('✓ Zapisano!');
+      editForm.style.display = 'none'; headerView.style.display = 'flex';
+      loadProjectData();
+    } catch (err) { window.showToast('⚠ Błąd zapisu.', 'error'); }
+  });
+
+  document.getElementById('btn-delete-project').addEventListener('click', async () => {
+    const confirm1 = confirm("UWAGA! To spowoduje całkowite usunięcie danych projektu i listy materiałów. Kontynuować?");
+    if (!confirm1) return;
+    const confirm2 = confirm("Czy na pewno? Tej operacji nie da się cofnąć.");
+    if (!confirm2) return;
+
+    try {
+      await deleteDoc(doc(db, "projects", currentUser.uid));
+      window.showToast('✓ Projekt został usunięty.');
+      editForm.style.display = 'none'; headerView.style.display = 'flex';
+      loadProjectData();
+    } catch (err) { window.showToast('⚠ Błąd usuwania projektu.', 'error'); }
+  });
+
+  // --- POBIERANIE PACZKI ZIP ---
+  document.getElementById('btn-download-zip').addEventListener('click', async () => {
+    if (!currentProjectData) return;
+    
+    const btn = document.getElementById('btn-download-zip');
+    btn.disabled = true;
+    btn.textContent = "Trwa pakowanie... ⏳";
+    window.showToast("Generowanie pliku ZIP. To może potrwać kilka sekund...", "info");
+
+    try {
+      const zip = new JSZip();
+      const folderZdjecia = zip.folder("Zdjecia_z_raportow");
+      
+      let textContent = `========================================================\n`;
+      textContent += `RAPORT Z POSTĘPU PRAC: ${currentProjectData.name.toUpperCase()}\n`;
+      textContent += `Wygenerowano: ${new Date().toLocaleString()}\n`;
+      textContent += `========================================================\n\n`;
+
+      // Pobieramy wszystkie raporty dla tego projektu z bazy danych
+      const q = query(collection(db, `projects/${currentUser.uid}/reports`), orderBy("createdAt", "desc"));
+      const querySnapshot = await getDocs(q);
+
+      let reportCounter = querySnapshot.size;
+      let photoCounter = 1;
+
+      // Iterujemy przez wszystkie raporty
+      for (const docSnapshot of querySnapshot.docs) {
+        const r = docSnapshot.data();
+        const date = r.createdAt?.toDate().toLocaleString() || 'Brak daty';
+        
+        textContent += `--- RAPORT #${reportCounter} --------------------------------------\n`;
+        textContent += `Data: ${date}\n`;
+        textContent += `Autor: ${r.author}\n\n`;
+        textContent += `TREŚĆ:\n${r.text || 'Brak wpisu tekstowego.'}\n\n`;
+
+        // Zbieramy wszystkie linki do zdjęć z różnych wersji aplikacji
+        let allImages = [];
+        if (r.images && r.images.length > 0) {
+            allImages = r.images.map(img => img.url);
+        } else if (r.imageUrls && r.imageUrls.length > 0) {
+            allImages = r.imageUrls;
+        } else if (r.imageUrl) {
+            allImages = [r.imageUrl];
+        }
+
+        if (allImages.length > 0) {
+            textContent += `ZAŁĄCZNIKI W TYM RAPORCIE (${allImages.length} szt.):\n`;
+            
+            // Pobieramy każde zdjęcie z Firebase Storage
+            for (let url of allImages) {
+                try {
+                    const response = await fetch(url);
+                    const blob = await response.blob();
+                    
+                    // Nadajemy zdjęciu unikalną i czytelną nazwę
+                    const fileName = `Raport_${reportCounter}_Zdjecie_${photoCounter}.jpg`;
+                    folderZdjecia.file(fileName, blob);
+                    
+                    textContent += `- Zapisano jako: ${fileName}\n`;
+                    photoCounter++;
+                } catch (e) {
+                    textContent += `- (Błąd) Nie udało się pobrać załącznika z chmury.\n`;
+                    console.error("Błąd pobierania zdjęcia do ZIP:", e);
+                }
+            }
+        }
+        textContent += `\n\n`;
+        reportCounter--;
+      }
+
+      // Dodajemy główny plik tekstowy do paczki ZIP
+      zip.file("Raport_Tekstowy.txt", textContent);
+
+      // Generujemy archiwum i wymuszamy pobieranie u Inwestora
+      const content = await zip.generateAsync({ type: "blob" });
+      const safeProjectName = currentProjectData.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+      saveAs(content, `Raport_Budowy_${safeProjectName}.zip`);
+      
+      window.showToast("✓ Paczka gotowa do pobrania!");
+    } catch (err) {
+      console.error("Błąd generowania ZIP:", err);
+      window.showToast("⚠ Wystąpił błąd podczas pakowania archiwum.", "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "📦 Pobierz jako ZIP";
+    }
+  });
+
+  window.logout = function() { signOut(auth).then(() => { window.location.href = 'index.html'; }); };
+  window.showToast = function(msg, type) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast' + (type === 'error' ? ' error' : '') + ' show';
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => t.classList.remove('show'), 3500);
+  };
+  window.copyLink = function() {
+    const link = contractorLink.textContent;
+    if(link.includes('Zapisz')) return;
+    navigator.clipboard.writeText(link);
+    window.showToast('✓ Link skopiowany!');
+  };
+</script>
+</body>
+</html>

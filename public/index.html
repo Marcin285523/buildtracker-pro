@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Logowanie — BuildTracker Pro</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<a href="#main-login" class="skip-link">Przejdź do treści głównej</a>
+
+<div id="login" class="view" role="main">
+  <div class="login-box" role="region" aria-label="Logowanie" id="main-login">
+    <div class="login-logo">
+      <div class="logo" aria-label="BuildTracker Pro">Build<span>Tracker</span><em>Pro</em></div>
+      <p>Zarządzaj budową. Łącz inwestora z wykonawcą.</p>
+    </div>
+
+    <div class="tabs" role="tablist" aria-label="Tryb dostępu">
+      <button class="tab active" role="tab" aria-selected="true" id="tab-login" onclick="switchTab('login')">Zaloguj się</button>
+      <button class="tab" role="tab" aria-selected="false" id="tab-register" onclick="switchTab('register')">Załóż konto</button>
+    </div>
+
+    <div id="panel-login" role="tabpanel" aria-labelledby="tab-login">
+      <div class="form-group">
+        <label for="l-email">Adres e-mail</label>
+        <input type="email" id="l-email" placeholder="jan@example.com" autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label for="l-pass">Hasło</label>
+        <input type="password" id="l-pass" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <button class="btn-primary" id="btn-login-submit">Zaloguj się</button>
+      <div class="divider">lub</div>
+      <p class="demo-label">Demo — wejdź bez rejestracji</p>
+      <div class="demo-btns">
+        <button class="btn-demo" onclick="loginAs('investor')" aria-label="Wejdź jako inwestor (demo)">👤 Inwestor</button>
+        <button class="btn-demo" onclick="loginAs('contractor')" aria-label="Wejdź jako wykonawca (demo)">🔧 Wykonawca</button>
+      </div>
+    </div>
+
+    <div id="panel-register" role="tabpanel" aria-labelledby="tab-register" hidden>
+      <div class="form-group">
+        <label for="r-name">Imię i nazwisko</label>
+        <input type="text" id="r-name" placeholder="Jan Kowalski" autocomplete="name">
+      </div>
+      <div class="form-group">
+        <label for="r-email">Adres e-mail</label>
+        <input type="email" id="r-email" placeholder="jan@example.com" autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label for="r-pass">Hasło</label>
+        <input type="password" id="r-pass" placeholder="min. 8 znaków" autocomplete="new-password">
+      </div>
+      <div class="form-group">
+        <label for="r-role">Rola</label>
+        <select id="r-role">
+          <option>Inwestor / Właściciel budowy</option>
+          <option>Wykonawca / Kierownik budowy</option>
+        </select>
+      </div>
+      <button class="btn-primary" id="btn-register-submit">Utwórz konto</button>
+    </div>
+  </div>
+</div>
+
+  <script type="module">
+  // 1. Importowanie modułów Firebase prosto od Google
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+  import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
+  import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+
+  // --------------------------------------------------------
+  // TUTAJ WKLEJ SWÓJ firebaseConfig (podmień ten poniżej na swój)
+const firebaseConfig = {
+  apiKey: "AIzaSyCn3A18LpsZquFzOahvvuySUILNXZM_kwk",
+  authDomain: "btpro-6fb00.firebaseapp.com",
+  projectId: "btpro-6fb00",
+  storageBucket: "btpro-6fb00.firebasestorage.app",
+  messagingSenderId: "716860697893",
+  appId: "1:716860697893:web:42f51baccb483142853ecc"
+};
+  // --------------------------------------------------------
+
+  // Uruchomienie Firebase na stronie
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  // 2. Zostawiamy funkcje wizualne (przełączanie zakładek i demo)
+  window.switchTab = function(which) {
+    const loginTab = document.getElementById('tab-login');
+    const registerTab = document.getElementById('tab-register');
+    const loginPanel = document.getElementById('panel-login');
+    const registerPanel = document.getElementById('panel-register');
+    if (which === 'login') {
+      loginTab.classList.add('active'); loginTab.setAttribute('aria-selected','true');
+      registerTab.classList.remove('active'); registerTab.setAttribute('aria-selected','false');
+      loginPanel.hidden = false; registerPanel.hidden = true;
+    } else {
+      registerTab.classList.add('active'); registerTab.setAttribute('aria-selected','true');
+      loginTab.classList.remove('active'); loginTab.setAttribute('aria-selected','false');
+      registerPanel.hidden = false; loginPanel.hidden = true;
+    }
+  }
+
+  window.loginAs = function(role) {
+    window.location.href = role === 'investor' ? 'investor.html' : 'contractor.html';
+  }
+
+  // 3. REJESTRACJA NOWEGO KONTA
+  document.getElementById('btn-register-submit').addEventListener('click', async () => {
+    const name = document.getElementById('r-name').value;
+    const email = document.getElementById('r-email').value;
+    const pass = document.getElementById('r-pass').value;
+    const roleSelect = document.getElementById('r-role').value;
+    
+    // Sprawdzamy, którą rolę wybrano na liście (Inwestor czy Wykonawca)
+    const role = roleSelect.includes('Inwestor') ? 'investor' : 'contractor';
+
+    if(!name || !email || !pass) {
+        alert('Proszę wypełnić wszystkie pola!');
+        return;
+    }
+
+    try {
+      // Magia Google: Zapisujemy e-mail i hasło (Firebase Authentication)
+      const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
+      const user = userCredential.user;
+
+      // Zapisujemy dodatkowe dane jak "Imię" i "Rola" w bazie danych (Firestore)
+      await setDoc(doc(db, "users", user.uid), {
+        name: name,
+        email: email,
+        role: role,
+        createdAt: new Date()
+      });
+
+      alert('Konto założone pomyślnie!');
+      // Logowanie i przejście do odpowiedniego panelu
+      window.location.href = role === 'investor' ? 'investor.html' : 'contractor.html';
+      
+    } catch (error) {
+      console.error("Błąd podczas rejestracji:", error);
+      alert('Nie udało się utworzyć konta: ' + error.message);
+    }
+  });
+
+  // 4. LOGOWANIE DO ISTNIEJĄCEGO KONTA
+  document.getElementById('btn-login-submit').addEventListener('click', async () => {
+    const email = document.getElementById('l-email').value;
+    const pass = document.getElementById('l-pass').value;
+
+    if(!email || !pass) {
+        alert('Wpisz e-mail i hasło!');
+        return;
+    }
+
+    try {
+      // Magia Google: Sprawdzamy, czy hasło jest poprawne
+      const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+      const user = userCredential.user;
+
+      // Jeśli się zgadza, idziemy do Bazy Danych zapytać o rolę tego użytkownika
+      const userDoc = await getDoc(doc(db, "users", user.uid));
+      
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        alert('Zalogowano pomyślnie!');
+        // Przekierowujemy odpowiednio: inwestor -> investor.html, wykonawca -> contractor.html
+        window.location.href = userData.role === 'investor' ? 'investor.html' : 'contractor.html';
+      } else {
+        alert('Konto istnieje, ale brak jego profilu w bazie.');
+      }
+
+    } catch (error) {
+      console.error("Błąd logowania:", error);
+      alert('Błąd logowania! Sprawdź, czy e-mail i hasło są poprawne.');
+    }
+  });
+</script>
+</body>
+</html>

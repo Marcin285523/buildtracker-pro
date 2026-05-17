@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panel Wykonawcy — BuildTracker Pro</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="contractor" class="view">
+  <nav>
+    <div class="logo">Build<span>Tracker</span><em>Pro</em></div>
+    <div class="nav-right">
+      <span class="nav-user" id="user-display">Ładowanie...</span>
+      <button class="btn-nav" onclick="logout()">Wyloguj</button>
+    </div>
+  </nav>
+
+  <main class="main-content" id="main-ui" style="display: none;">
+    <div class="project-header">
+      <div>
+        <h1 class="project-title" id="proj-name">Nazwa Inwestycji</h1>
+        <p class="project-status" id="proj-desc">Opis projektu...</p>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <aside>
+        <div class="sidebar">
+          <div class="sidebar-card">
+            <h2>Dokumentacja i Plany</h2>
+            <div id="doc-list-contractor"></div>
+          </div>
+          <div class="sidebar-card">
+            <h2>Lista materiałów</h2>
+            <div id="mat-list-contractor"></div>
+          </div>
+        </div>
+      </aside>
+
+      <section>
+        <div class="sidebar-card" style="margin-bottom: 30px;">
+          <h2 style="margin-bottom: 15px;">Dodaj raport z postępu prac</h2>
+          <textarea id="report-text" placeholder="Opisz co dzisiaj zrobiono, co kupiono lub jakie są problemy..." style="width: 100%; min-height: 80px; margin-bottom: 10px;"></textarea>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <input type="file" id="report-file" style="display: none;" accept="image/*" multiple>
+            <button class="btn-demo" onclick="document.getElementById('report-file').click()" id="btn-file-label">📸 Dodaj zdjęcia</button>
+            <button class="btn-demo" id="btn-mic" title="Naciśnij, aby zacząć nagrywać dla Google Cloud">🎤 Dyktuj</button>
+            <button class="btn-primary" id="btn-send-report" style="flex: 1;">Wyślij raport</button>
+          </div>
+          <p id="file-status" style="font-size: 11px; color: var(--primary); margin-top: 5px;"></p>
+        </div>
+
+        <h2 class="section-title">Oś czasu (Historia prac)</h2>
+        <div id="timeline" class="timeline-track">
+          <p style="color: var(--text-muted);">Ładowanie raportów...</p>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <div id="no-project-error" style="display: none;">
+    <h1>Ups! Brak dostępu.</h1>
+    <p>Ten link jest nieprawidłowy lub nie masz uprawnień do tego projektu.</p>
+    <button class="btn-primary" onclick="window.location.href='index.html'">Wróć do logowania</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+  import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
+  import { getFirestore, doc, getDoc, collection, addDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+  import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-storage.js";
+  import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-functions.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCn3A18LpsZquFzOahvvuySUILNXZM_kwk",
+    authDomain: "btpro-6fb00.firebaseapp.com",
+    projectId: "btpro-6fb00",
+    storageBucket: "btpro-6fb00.firebasestorage.app",
+    messagingSenderId: "716860697893",
+    appId: "1:716860697893:web:42f51baccb483142853ecc"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const storage = getStorage(app);
+  
+  // INICJALIZACJA FUNKCJI CLOUD
+  const cloudFunctions = getFunctions(app);
+  const transcribeAudio = httpsCallable(cloudFunctions, 'transcribeAudio');
+  const analyzeImage = httpsCallable(cloudFunctions, 'analyzeImage'); 
+
+  let currentUserName = "Wykonawca";
+  let projectId = new URLSearchParams(window.location.search).get('projekt');
+
+  onAuthStateChanged(auth, async (user) => {
+    if (user) {
+      const uDoc = await getDoc(doc(db, "users", user.uid));
+      currentUserName = uDoc.exists() ? uDoc.data().name : "Wykonawca";
+      document.getElementById('user-display').textContent = `Wykonawca: ${currentUserName}`;
+      
+      if (!projectId) {
+        document.getElementById('no-project-error').style.display = 'block';
+      } else {
+        initContractorPage();
+      }
+    } else {
+      window.location.href = 'index.html';
+    }
+  });
+
+  async function initContractorPage() {
+    const pDoc = await getDoc(doc(db, "projects", projectId));
+    if (!pDoc.exists()) {
+      document.getElementById('no-project-error').style.display = 'block';
+      return;
+    }
+    document.getElementById('main-ui').style.display = 'block';
+    const data = pDoc.data();
+    
+    document.getElementById('proj-name').textContent = data.name;
+    document.getElementById('proj-desc').textContent = data.description;
+
+    const mList = document.getElementById('mat-list-contractor');
+    mList.innerHTML = (data.materials || []).map(m => `
+      <div class="mat-row"><span class="mat-name">${m.name}</span><span class="mat-qty">${m.quantity}</span></div>
+    `).join('') || '<p class="empty-list">Brak listy materiałów.</p>';
+
+    const dList = document.getElementById('doc-list-contractor');
+    dList.innerHTML = (data.documents || []).map(d => `
+      <div class="doc-item">
+        <div class="doc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+        <span class="doc-name">${d.name}</span>
+        <a href="${d.url}" target="_blank" style="font-size:12px; color:var(--primary);">Otwórz</a>
+      </div>
+    `).join('') || '<p class="empty-list">Brak dokumentacji.</p>';
+
+    const q = query(collection(db, `projects/${projectId}/reports`), orderBy("createdAt", "desc"));
+    onSnapshot(q, (snapshot) => {
+      const timeline = document.getElementById('timeline');
+      timeline.innerHTML = snapshot.docs.map(doc => {
+        const r = doc.data();
+        const date = r.createdAt?.toDate().toLocaleString() || 'Przed chwilą';
+        
+        let imagesHtml = '';
+        
+        // NOWY SYSTEM (Wspiera AI Vision i stare zdjęcia)
+        if (r.images && r.images.length > 0) {
+          imagesHtml = `<div class="report-images" style="margin-top: 10px;">` + r.images.map(img => `
+              <div style="position: relative; display: inline-block; margin-right: 10px; margin-bottom: 10px;">
+                  <a href="${img.url}" target="_blank"><img src="${img.url}" class="report-img" alt="Załącznik"></a>
+                  <span style="position: absolute; bottom: 8px; right: 8px; background: ${img.tag === 'Dokument' ? '#b91c1c' : '#1d4ed8'}; color: white; padding: 3px 8px; font-size: 10px; border-radius: 4px; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,0.3);">${img.tag}</span>
+              </div>
+          `).join('') + `</div>`;
+        } else if (r.imageUrls && r.imageUrls.length > 0) {
+          imagesHtml = `<div class="report-images" style="margin-top: 10px;">` + r.imageUrls.map(url => `<a href="${url}" target="_blank"><img src="${url}" class="report-img" alt="Zdjęcie z budowy" style="margin-right: 10px; margin-bottom: 10px;"></a>`).join('') + `</div>`;
+        } else if (r.imageUrl) {
+          imagesHtml = `<div class="report-images" style="margin-top: 10px;"><a href="${r.imageUrl}" target="_blank"><img src="${r.imageUrl}" class="report-img" alt="Zdjęcie z budowy"></a></div>`;
+        }
+
+        return `
+          <div class="report-card">
+            <div class="report-meta">
+              <span class="report-author">👤 ${r.author}</span>
+              <span>📅 ${date}</span>
+            </div>
+            <div class="report-content">${r.text}</div>
+            ${imagesHtml}
+          </div>
+        `;
+      }).join('') || '<p>Brak raportów na tej budowie.</p>';
+    });
+  }
+
+  // --- OBSŁUGA PLIKÓW ---
+  let selectedFiles = [];
+  document.getElementById('report-file').addEventListener('change', (e) => {
+    selectedFiles = Array.from(e.target.files);
+    if (selectedFiles.length > 0) {
+      document.getElementById('file-status').textContent = `📎 Wybrano zdjęć/plików: ${selectedFiles.length}`;
+    } else {
+      document.getElementById('file-status').textContent = '';
+    }
+  });
+
+  // --- WYSYŁANIE RAPORTU Z AI VISION ---
+  document.getElementById('btn-send-report').addEventListener('click', async () => {
+    const text = document.getElementById('report-text').value.trim();
+    if (!text && selectedFiles.length === 0) return;
+
+    const btn = document.getElementById('btn-send-report');
+    btn.disabled = true;
+    btn.textContent = "Wysyłanie...";
+
+    try {
+      let imagesData = []; 
+      
+      if (selectedFiles.length > 0) {
+        for (let file of selectedFiles) {
+          const path = `reports/${projectId}/${Date.now()}_${file.name}`;
+          const sRef = ref(storage, path);
+          
+          await uploadBytes(sRef, file);
+          const url = await getDownloadURL(sRef);
+          
+          window.showToast("AI analizuje zdjęcie... ⏳");
+          let tag = "Zdjęcie"; // Domyślny tag w razie błędu API
+          try {
+             // Wysyłamy ścieżkę pliku (path) zamiast URL
+             const aiResult = await analyzeImage({ filePath: path });
+             if (aiResult && aiResult.data && aiResult.data.tag) {
+                 tag = aiResult.data.tag;
+             }
+          } catch(e) {
+             console.error("Nie udało się pobrać tagu AI:", e);
+          }
+
+          imagesData.push({ url: url, tag: tag });
+        }
+      }
+
+      await addDoc(collection(db, `projects/${projectId}/reports`), {
+        text,
+        images: imagesData,
+        author: currentUserName,
+        createdAt: new Date()
+      });
+
+      document.getElementById('report-text').value = '';
+      document.getElementById('report-file').value = '';
+      document.getElementById('file-status').textContent = '';
+      selectedFiles = [];
+      window.showToast("✓ Raport został wysłany!");
+    } catch (err) {
+      console.error(err);
+      window.showToast("⚠ Błąd wysyłania raportu.", "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Wyślij raport";
+    }
+  });
+
+  // --- ZAAWANSOWANE DYKTOWANIE (GOOGLE CLOUD SPEECH-TO-TEXT) ---
+  const btnMic = document.getElementById('btn-mic');
+  const textArea = document.getElementById('report-text');
+  let mediaRecorder;
+  let audioChunks = [];
+
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1 } });
+      mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+      
+      mediaRecorder.ondataavailable = event => {
+        if (event.data.size > 0) {
+          audioChunks.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        btnMic.innerHTML = '⏳ Tłumaczenie...';
+        btnMic.disabled = true;
+
+        const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
+        audioChunks = [];
+
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+        reader.onloadend = async () => {
+          const base64Audio = reader.result.split(',')[1];
+          
+          try {
+            const result = await transcribeAudio({ audio: base64Audio });
+            const translatedText = result.data.text;
+
+            if (translatedText) {
+               if (textArea.value.length > 0 && !textArea.value.endsWith(' ')) {
+                 textArea.value += ' ' + translatedText;
+               } else {
+                 textArea.value += translatedText;
+               }
+               window.showToast("✓ Głos przetłumaczony!");
+            } else {
+               window.showToast("⚠ Nie rozpoznano żadnych słów.");
+            }
+          } catch (error) {
+            console.error(error);
+            window.showToast("⚠ Błąd serwera podczas tłumaczenia.", "error");
+          } finally {
+             btnMic.innerHTML = '🎤 Dyktuj';
+             btnMic.disabled = false;
+             btnMic.style.color = '';
+             btnMic.style.borderColor = '';
+             btnMic.style.background = '';
+          }
+        };
+
+        mediaRecorder.stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      btnMic.innerHTML = '🛑 Nagrywam...';
+      btnMic.style.color = '#ef4444';
+      btnMic.style.borderColor = '#ef4444';
+      btnMic.style.background = '#fef2f2';
+
+    } catch (err) {
+      console.error(err);
+      window.showToast("⚠ Brak dostępu do mikrofonu.", "error");
+    }
+  }
+
+  btnMic.addEventListener('click', () => {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+      mediaRecorder.stop();
+    } else {
+      startRecording();
+    }
+  });
+
+  window.logout = function() { signOut(auth).then(() => window.location.href = 'index.html'); };
+  window.showToast = function(msg, type) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast' + (type === 'error' ? ' error' : '') + ' show';
+    setTimeout(() => t.classList.remove('show'), 3500);
+  };
+</script>
+</body>
+</html>
