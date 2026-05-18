@@ -108,17 +108,16 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
   import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
-  // Dodano getDocs do importów
   import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, orderBy, onSnapshot, getDocs } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
   import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-storage.js";
 
   const firebaseConfig = {
-apiKey: "TUTAJ_WPISZ_KLUCZ_Z_FIREBASE",
-    authDomain: "TWOJA_DOMENA.firebaseapp.com",
-    projectId: "TWOJ_PROJEKT",
-    storageBucket: "TWOJ_BUCKET.firebasestorage.app",
-    messagingSenderId: "SENDER_ID",
-    appId: "APP_ID"
+    apiKey: "AIzaSyCn3A18LpsZquFzOahvvuySUILNXZM_kwk",
+    authDomain: "btpro-6fb00.firebaseapp.com",
+    projectId: "btpro-6fb00",
+    storageBucket: "btpro-6fb00.firebasestorage.app",
+    messagingSenderId: "716860697893",
+    appId: "1:716860697893:web:42f51baccb483142853ecc"
   };
 
   const app = initializeApp(firebaseConfig);
@@ -347,18 +346,40 @@ apiKey: "TUTAJ_WPISZ_KLUCZ_Z_FIREBASE",
     } catch (err) { window.showToast('⚠ Błąd zapisu.', 'error'); }
   });
 
+  // --- NOWY SYSTEM USUWANIA PROJEKTU (GŁĘBOKIE CZYSZCZENIE) ---
   document.getElementById('btn-delete-project').addEventListener('click', async () => {
-    const confirm1 = confirm("UWAGA! To spowoduje całkowite usunięcie danych projektu i listy materiałów. Kontynuować?");
+    const confirm1 = confirm("UWAGA! To spowoduje całkowite usunięcie danych projektu, listy materiałów ORAZ WSZYSTKICH RAPORTÓW. Kontynuować?");
     if (!confirm1) return;
     const confirm2 = confirm("Czy na pewno? Tej operacji nie da się cofnąć.");
     if (!confirm2) return;
 
     try {
+      // 1. Zdefiniowanie ścieżki do kolekcji z raportami
+      const reportsRef = collection(db, `projects/${currentUser.uid}/reports`);
+      
+      // 2. Pobranie wszystkich raportów należących do tego projektu
+      const reportsSnapshot = await getDocs(reportsRef);
+      
+      // 3. Usuwanie każdego pojedyncznego raportu
+      const deletePromises = [];
+      reportsSnapshot.forEach((reportDoc) => {
+          deletePromises.push(deleteDoc(reportDoc.ref));
+      });
+      
+      // Czekamy na wyczyszczenie całej podkolekcji
+      await Promise.all(deletePromises);
+
+      // 4. Na koniec usuwamy główny dokument projektu
       await deleteDoc(doc(db, "projects", currentUser.uid));
-      window.showToast('✓ Projekt został usunięty.');
-      editForm.style.display = 'none'; headerView.style.display = 'flex';
+      
+      window.showToast('✓ Projekt i raporty zostały całkowicie usunięte.');
+      editForm.style.display = 'none'; 
+      headerView.style.display = 'flex';
       loadProjectData();
-    } catch (err) { window.showToast('⚠ Błąd usuwania projektu.', 'error'); }
+    } catch (err) { 
+        console.error(err);
+        window.showToast('⚠ Błąd usuwania projektu.', 'error'); 
+    }
   });
 
   // --- POBIERANIE PACZKI ZIP ---
@@ -379,14 +400,12 @@ apiKey: "TUTAJ_WPISZ_KLUCZ_Z_FIREBASE",
       textContent += `Wygenerowano: ${new Date().toLocaleString()}\n`;
       textContent += `========================================================\n\n`;
 
-      // Pobieramy wszystkie raporty dla tego projektu z bazy danych
       const q = query(collection(db, `projects/${currentUser.uid}/reports`), orderBy("createdAt", "desc"));
       const querySnapshot = await getDocs(q);
 
       let reportCounter = querySnapshot.size;
       let photoCounter = 1;
 
-      // Iterujemy przez wszystkie raporty
       for (const docSnapshot of querySnapshot.docs) {
         const r = docSnapshot.data();
         const date = r.createdAt?.toDate().toLocaleString() || 'Brak daty';
@@ -396,7 +415,6 @@ apiKey: "TUTAJ_WPISZ_KLUCZ_Z_FIREBASE",
         textContent += `Autor: ${r.author}\n\n`;
         textContent += `TREŚĆ:\n${r.text || 'Brak wpisu tekstowego.'}\n\n`;
 
-        // Zbieramy wszystkie linki do zdjęć z różnych wersji aplikacji
         let allImages = [];
         if (r.images && r.images.length > 0) {
             allImages = r.images.map(img => img.url);
@@ -409,13 +427,11 @@ apiKey: "TUTAJ_WPISZ_KLUCZ_Z_FIREBASE",
         if (allImages.length > 0) {
             textContent += `ZAŁĄCZNIKI W TYM RAPORCIE (${allImages.length} szt.):\n`;
             
-            // Pobieramy każde zdjęcie z Firebase Storage
             for (let url of allImages) {
                 try {
                     const response = await fetch(url);
                     const blob = await response.blob();
                     
-                    // Nadajemy zdjęciu unikalną i czytelną nazwę
                     const fileName = `Raport_${reportCounter}_Zdjecie_${photoCounter}.jpg`;
                     folderZdjecia.file(fileName, blob);
                     
@@ -431,10 +447,8 @@ apiKey: "TUTAJ_WPISZ_KLUCZ_Z_FIREBASE",
         reportCounter--;
       }
 
-      // Dodajemy główny plik tekstowy do paczki ZIP
       zip.file("Raport_Tekstowy.txt", textContent);
 
-      // Generujemy archiwum i wymuszamy pobieranie u Inwestora
       const content = await zip.generateAsync({ type: "blob" });
       const safeProjectName = currentProjectData.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
       saveAs(content, `Raport_Budowy_${safeProjectName}.zip`);
