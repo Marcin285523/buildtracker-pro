@@ -1,10 +1,10 @@
-# BuildTracker Pro 🏗️
+# BuildTracker Pro
 
-**BuildTracker Pro** to nowoczesna, w pełni responsywna aplikacja webowa typu Single Page Application (SPA) zaprojektowana do zarządzania i monitorowania postępu prac budowlanych w czasie rzeczywistym. System opiera się na architekturze Serverless (Firebase) i wykorzystuje zaawansowane mechanizmy Sztucznej Inteligencji Google Cloud (Vision API oraz Speech-to-Text).
+**BuildTracker Pro** to nowoczesna, w pełni responsywna aplikacja webowa zaprojektowana do zarządzania i monitorowania postępu prac budowlanych w czasie rzeczywistym. System opiera się na architekturze Serverless (Firebase) i wykorzystuje zaawansowane mechanizmy Sztucznej Inteligencji Google Cloud (Vision API oraz Speech-to-Text).
 
 ---
 
-## 🚀 Główne Funkcjonalności
+## Główne Funkcjonalności
 
 * **Panel Inwestora / Kierownika Budowy:**
   * Tworzenie i zarządzanie profilem inwestycji.
@@ -22,9 +22,9 @@
 
 ---
 
-## 🛠 Wykorzystane Technologie
+## Wykorzystane Technologie
 
-* **Frontend:** HTML5, CSS3 (zmienne CSS, Grid, Flexbox), Vanilla JavaScript (ES6+).
+* **Frontend:** HTML5, CSS3, Vanilla JavaScript (ES6+).
 * **Backend:** Node.js, Firebase Cloud Functions (v2).
 * **Baza Danych i Pliki:** Cloud Firestore (Realtime), Firebase Storage.
 * **Autoryzacja:** Firebase Authentication.
@@ -33,7 +33,7 @@
 
 ---
 
-## 📁 Struktura Projektu
+## Struktura Projektu
 
 ```text
 buildtracker-pro/
