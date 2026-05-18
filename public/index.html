@@ -33,12 +33,6 @@
         <input type="password" id="l-pass" placeholder="••••••••" autocomplete="current-password">
       </div>
       <button class="btn-primary" id="btn-login-submit">Zaloguj się</button>
-      <div class="divider">lub</div>
-      <p class="demo-label">Demo — wejdź bez rejestracji</p>
-      <div class="demo-btns">
-        <button class="btn-demo" onclick="loginAs('investor')" aria-label="Wejdź jako inwestor (demo)">👤 Inwestor</button>
-        <button class="btn-demo" onclick="loginAs('contractor')" aria-label="Wejdź jako wykonawca (demo)">🔧 Wykonawca</button>
-      </div>
     </div>
 
     <div id="panel-register" role="tabpanel" aria-labelledby="tab-register" hidden>
@@ -100,11 +94,7 @@
     }
   }
 
-  window.loginAs = function(role) {
-    window.location.href = role === 'investor' ? 'investor.html' : 'contractor.html';
-  }
-
-  // Odczytanie parametrów z URL
+  // Odczytanie parametrów z URL do inteligentnego przekierowania
   const urlParams = new URLSearchParams(window.location.search);
   const returnTo = urlParams.get('returnTo');
   const projekt = urlParams.get('projekt');
@@ -165,7 +155,6 @@
       
       if (userDoc.exists()) {
         const userData = userDoc.data();
-        alert('Zalogowano pomyślnie!');
         
         // Inteligentne przekierowanie po logowaniu
         if (returnTo && projekt && userData.role === 'contractor') {
