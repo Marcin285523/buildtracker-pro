@@ -66,12 +66,12 @@
   </div>
 </div>
 
-  <script type="module">
-  // 1. Importowanie modułów Firebase prosto od Google
+<script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
   import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
   import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
 
+<<<<<<< HEAD
   // --------------------------------------------------------
   // TUTAJ WKLEJ SWÓJ firebaseConfig (podmień ten poniżej na swój)
 const firebaseConfig = {
@@ -83,13 +83,21 @@ apiKey: "TUTAJ_WPISZ_KLUCZ_Z_FIREBASE",
     appId: "APP_ID"
 };
   // --------------------------------------------------------
+=======
+  const firebaseConfig = {
+    apiKey: "AIzaSyCn3A18LpsZquFzOahvvuySUILNXZM_kwk",
+    authDomain: "btpro-6fb00.firebaseapp.com",
+    projectId: "btpro-6fb00",
+    storageBucket: "btpro-6fb00.firebasestorage.app",
+    messagingSenderId: "716860697893",
+    appId: "1:716860697893:web:42f51baccb483142853ecc"
+  };
+>>>>>>> 303f663 (modified:   public/contractor.html)
 
-  // Uruchomienie Firebase na stronie
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
   const db = getFirestore(app);
 
-  // 2. Zostawiamy funkcje wizualne (przełączanie zakładek i demo)
   window.switchTab = function(which) {
     const loginTab = document.getElementById('tab-login');
     const registerTab = document.getElementById('tab-register');
@@ -110,14 +118,17 @@ apiKey: "TUTAJ_WPISZ_KLUCZ_Z_FIREBASE",
     window.location.href = role === 'investor' ? 'investor.html' : 'contractor.html';
   }
 
-  // 3. REJESTRACJA NOWEGO KONTA
+  // Odczytanie parametrów z URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const returnTo = urlParams.get('returnTo');
+  const projekt = urlParams.get('projekt');
+
   document.getElementById('btn-register-submit').addEventListener('click', async () => {
     const name = document.getElementById('r-name').value;
     const email = document.getElementById('r-email').value;
     const pass = document.getElementById('r-pass').value;
     const roleSelect = document.getElementById('r-role').value;
     
-    // Sprawdzamy, którą rolę wybrano na liście (Inwestor czy Wykonawca)
     const role = roleSelect.includes('Inwestor') ? 'investor' : 'contractor';
 
     if(!name || !email || !pass) {
@@ -126,11 +137,9 @@ apiKey: "TUTAJ_WPISZ_KLUCZ_Z_FIREBASE",
     }
 
     try {
-      // Magia Google: Zapisujemy e-mail i hasło (Firebase Authentication)
       const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
       const user = userCredential.user;
 
-      // Zapisujemy dodatkowe dane jak "Imię" i "Rola" w bazie danych (Firestore)
       await setDoc(doc(db, "users", user.uid), {
         name: name,
         email: email,
@@ -139,8 +148,13 @@ apiKey: "TUTAJ_WPISZ_KLUCZ_Z_FIREBASE",
       });
 
       alert('Konto założone pomyślnie!');
-      // Logowanie i przejście do odpowiedniego panelu
-      window.location.href = role === 'investor' ? 'investor.html' : 'contractor.html';
+      
+      // Inteligentne przekierowanie po rejestracji
+      if (returnTo && projekt && role === 'contractor') {
+          window.location.href = `${returnTo}?projekt=${projekt}`;
+      } else {
+          window.location.href = role === 'investor' ? 'investor.html' : 'contractor.html';
+      }
       
     } catch (error) {
       console.error("Błąd podczas rejestracji:", error);
@@ -148,7 +162,6 @@ apiKey: "TUTAJ_WPISZ_KLUCZ_Z_FIREBASE",
     }
   });
 
-  // 4. LOGOWANIE DO ISTNIEJĄCEGO KONTA
   document.getElementById('btn-login-submit').addEventListener('click', async () => {
     const email = document.getElementById('l-email').value;
     const pass = document.getElementById('l-pass').value;
@@ -159,18 +172,21 @@ apiKey: "TUTAJ_WPISZ_KLUCZ_Z_FIREBASE",
     }
 
     try {
-      // Magia Google: Sprawdzamy, czy hasło jest poprawne
       const userCredential = await signInWithEmailAndPassword(auth, email, pass);
       const user = userCredential.user;
 
-      // Jeśli się zgadza, idziemy do Bazy Danych zapytać o rolę tego użytkownika
       const userDoc = await getDoc(doc(db, "users", user.uid));
       
       if (userDoc.exists()) {
         const userData = userDoc.data();
         alert('Zalogowano pomyślnie!');
-        // Przekierowujemy odpowiednio: inwestor -> investor.html, wykonawca -> contractor.html
-        window.location.href = userData.role === 'investor' ? 'investor.html' : 'contractor.html';
+        
+        // Inteligentne przekierowanie po logowaniu
+        if (returnTo && projekt && userData.role === 'contractor') {
+            window.location.href = `${returnTo}?projekt=${projekt}`;
+        } else {
+            window.location.href = userData.role === 'investor' ? 'investor.html' : 'contractor.html';
+        }
       } else {
         alert('Konto istnieje, ale brak jego profilu w bazie.');
       }

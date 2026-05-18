@@ -61,10 +61,10 @@
     </div>
   </main>
 
-  <div id="no-project-error" style="display: none;">
+  <div id="no-project-error" style="display: none; text-align: center; padding: 3rem;">
     <h1>Ups! Brak dostępu.</h1>
     <p>Ten link jest nieprawidłowy lub nie masz uprawnień do tego projektu.</p>
-    <button class="btn-primary" onclick="window.location.href='index.html'">Wróć do logowania</button>
+    <button class="btn-primary" onclick="window.location.href='index.html'" style="margin-top: 20px;">Wróć do logowania</button>
   </div>
 </div>
 
@@ -91,7 +91,6 @@ apiKey: "TUTAJ_WPISZ_KLUCZ_Z_FIREBASE",
   const db = getFirestore(app);
   const storage = getStorage(app);
   
-  // INICJALIZACJA FUNKCJI CLOUD
   const cloudFunctions = getFunctions(app);
   const transcribeAudio = httpsCallable(cloudFunctions, 'transcribeAudio');
   const analyzeImage = httpsCallable(cloudFunctions, 'analyzeImage'); 
@@ -99,29 +98,54 @@ apiKey: "TUTAJ_WPISZ_KLUCZ_Z_FIREBASE",
   let currentUserName = "Wykonawca";
   let projectId = new URLSearchParams(window.location.search).get('projekt');
 
+  // Funkcja pomocnicza do wyświetlania błędów
+  function showError(message) {
+    document.getElementById('main-ui').style.display = 'none';
+    const errorDiv = document.getElementById('no-project-error');
+    errorDiv.style.display = 'block';
+    errorDiv.querySelector('p').textContent = message;
+  }
+
   onAuthStateChanged(auth, async (user) => {
     if (user) {
       const uDoc = await getDoc(doc(db, "users", user.uid));
-      currentUserName = uDoc.exists() ? uDoc.data().name : "Wykonawca";
+      
+      if (!uDoc.exists()) {
+        showError("Nie znaleziono profilu użytkownika w bazie.");
+        return;
+      }
+
+      const userData = uDoc.data();
+
+      // Weryfikacja: Tylko użytkownicy z rolą 'contractor' mogą zobaczyć ten widok
+      if (userData.role !== 'contractor') {
+        showError("Ups! Brak dostępu. To konto nie ma uprawnień Wykonawcy.");
+        return;
+      }
+
+      currentUserName = userData.name || "Wykonawca";
       document.getElementById('user-display').textContent = `Wykonawca: ${currentUserName}`;
       
       if (!projectId) {
-        document.getElementById('no-project-error').style.display = 'block';
+        showError("Brak identyfikatora projektu w adresie URL.");
       } else {
         initContractorPage();
       }
     } else {
-      window.location.href = 'index.html';
+      // Jeśli użytkownik nie jest zalogowany, odeślij go do index.html z parametrami powrotu
+      window.location.href = `index.html?returnTo=contractor.html&projekt=${projectId || ''}`;
     }
   });
 
   async function initContractorPage() {
     const pDoc = await getDoc(doc(db, "projects", projectId));
     if (!pDoc.exists()) {
-      document.getElementById('no-project-error').style.display = 'block';
+      showError("Ten link jest nieprawidłowy lub projekt już nie istnieje.");
       return;
     }
+    document.getElementById('no-project-error').style.display = 'none';
     document.getElementById('main-ui').style.display = 'block';
+    
     const data = pDoc.data();
     
     document.getElementById('proj-name').textContent = data.name;
@@ -150,7 +174,6 @@ apiKey: "TUTAJ_WPISZ_KLUCZ_Z_FIREBASE",
         
         let imagesHtml = '';
         
-        // NOWY SYSTEM (Wspiera AI Vision i stare zdjęcia)
         if (r.images && r.images.length > 0) {
           imagesHtml = `<div class="report-images" style="margin-top: 10px;">` + r.images.map(img => `
               <div style="position: relative; display: inline-block; margin-right: 10px; margin-bottom: 10px;">
@@ -178,7 +201,6 @@ apiKey: "TUTAJ_WPISZ_KLUCZ_Z_FIREBASE",
     });
   }
 
-  // --- OBSŁUGA PLIKÓW ---
   let selectedFiles = [];
   document.getElementById('report-file').addEventListener('change', (e) => {
     selectedFiles = Array.from(e.target.files);
@@ -189,7 +211,6 @@ apiKey: "TUTAJ_WPISZ_KLUCZ_Z_FIREBASE",
     }
   });
 
-  // --- WYSYŁANIE RAPORTU Z AI VISION ---
   document.getElementById('btn-send-report').addEventListener('click', async () => {
     const text = document.getElementById('report-text').value.trim();
     if (!text && selectedFiles.length === 0) return;
@@ -210,9 +231,8 @@ apiKey: "TUTAJ_WPISZ_KLUCZ_Z_FIREBASE",
           const url = await getDownloadURL(sRef);
           
           window.showToast("AI analizuje zdjęcie... ⏳");
-          let tag = "Zdjęcie"; // Domyślny tag w razie błędu API
+          let tag = "Zdjęcie";
           try {
-             // Wysyłamy ścieżkę pliku (path) zamiast URL
              const aiResult = await analyzeImage({ filePath: path });
              if (aiResult && aiResult.data && aiResult.data.tag) {
                  tag = aiResult.data.tag;
@@ -246,7 +266,6 @@ apiKey: "TUTAJ_WPISZ_KLUCZ_Z_FIREBASE",
     }
   });
 
-  // --- ZAAWANSOWANE DYKTOWANIE (GOOGLE CLOUD SPEECH-TO-TEXT) ---
   const btnMic = document.getElementById('btn-mic');
   const textArea = document.getElementById('report-text');
   let mediaRecorder;
