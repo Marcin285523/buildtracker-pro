@@ -33,6 +33,7 @@ exports.transcribeAudio = functions.https.onCall(async (data, context) => {
     config: {
       encoding: 'WEBM_OPUS',
       languageCode: 'pl-PL',
+      sampleRateHertz: 48000, // <--- WYMUSZENIE CZĘSTOTLIWOŚCI
     },
   };
 
@@ -94,9 +95,7 @@ exports.analyzeImage = functions.https.onCall(async (request, context) => {
         const detectedWords = labels.map(l => l.description.toLowerCase());
 
         const documentKeywords = [
-            'document', 'paper', 'text', 'handwriting', 'invoice', 
-            'receipt', 'font', 'blueprint', 'plan', 'form', 
-            'page', 'diagram', 'line', 'number', 'schematic'
+            'document', 'paper', 'text', 'handwriting', 'font', 'blueprint', 'page', 'diagram'
         ];
         
         let isDocument = detectedWords.some(detectedWord => 
