@@ -49,11 +49,6 @@ buildtracker-pro/
 │   ├── contractor.html         # Aplikacja Wykonawcy
 │   └── styles.css              # Globalne style CSS
 │
-├── docs/                       # Katalog ze szczegółową dokumentacją
-│   ├── JAVASCRIPT.md           # Architektura JS
-│   ├── HTML.md                 # Struktura widoków
-│   └── CSS.md                  # System projektowania i stylów
-│
 ├── cors.json                   # Konfiguracja uprawnień pobierania z chmury
 ├── firebase.json               # Konfiguracja środowiska Firebase
 ├── .firebaserc                 # Powiązanie z projektem Google Cloud
