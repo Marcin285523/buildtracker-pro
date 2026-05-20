@@ -4,25 +4,52 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Logowanie — BuildTracker Pro</title>
+  <!--
+    Czcionka DM Sans z Google Fonts.
+    Wagi: 300 (light), 400 (regular), 500 (medium), 600 (semi-bold) + italic 400.
+    Zakres optyczny 9..40 pozwala na płynne skalowanie grubości w zależności od rozmiaru tekstu.
+  -->
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
+<!--
+  Link "skip navigation" widoczny wyłącznie po naciśnięciu klawisza Tab.
+  Pozwala użytkownikom czytników ekranu i klawiatury pominąć elementy nawigacyjne
+  i przejść bezpośrednio do głównej treści strony (atrybut href wskazuje na #main-login).
+-->
 <a href="#main-login" class="skip-link">Przejdź do treści głównej</a>
 
+<!-- Główny kontener widoku logowania. Klasa "view" pozwala na przełączanie
+     widoczności wielu widoków w aplikacji SPA bez przeładowania strony. -->
 <div id="login" class="view" role="main">
+
+  <!-- Karta logowania wyśrodkowana na stronie.
+       role="region" + aria-label informuje technologie asystujące o przeznaczeniu bloku. -->
   <div class="login-box" role="region" aria-label="Logowanie" id="main-login">
+
+    <!-- ── Logo i tagline aplikacji ──────────────────────────────────────────
+         Logo zbudowane z czystego HTML/CSS bez obrazka – lżejsze i skalowalne.
+         aria-label na wrappere zapewnia czytelny opis dla czytników ekranu,
+         które w przeciwnym razie mogłyby odczytać "Build Tracker Pro" bez formatowania. -->
     <div class="login-logo">
       <div class="logo" aria-label="BuildTracker Pro">Build<span>Tracker</span><em>Pro</em></div>
       <p>Zarządzaj budową. Łącz inwestora z wykonawcą.</p>
     </div>
 
+    <!-- ── Zakładki przełączające między panelami logowania i rejestracji ────
+         role="tablist" / role="tab" + aria-selected to wzorzec WAI-ARIA Tab Widget –
+         umożliwia nawigację zakładkami przy pomocy klawiatury i czytników ekranu.
+         Aktywna zakładka ma klasę "active" oraz aria-selected="true". -->
     <div class="tabs" role="tablist" aria-label="Tryb dostępu">
       <button class="tab active" role="tab" aria-selected="true" id="tab-login" onclick="switchTab('login')">Zaloguj się</button>
       <button class="tab" role="tab" aria-selected="false" id="tab-register" onclick="switchTab('register')">Załóż konto</button>
     </div>
 
+    <!-- ── Panel: Logowanie ──────────────────────────────────────────────────
+         role="tabpanel" + aria-labelledby łączy panel z odpowiadającą mu zakładką.
+         autocomplete ułatwia menedżerom haseł i przeglądarce autouzupełnianie pól. -->
     <div id="panel-login" role="tabpanel" aria-labelledby="tab-login">
       <div class="form-group">
         <label for="l-email">Adres e-mail</label>
@@ -35,6 +62,10 @@
       <button class="btn-primary" id="btn-login-submit">Zaloguj się</button>
     </div>
 
+    <!-- ── Panel: Rejestracja ─────────────────────────────────────────────────
+         Atrybut "hidden" ukrywa panel domyślnie – jest on pokazywany dopiero
+         po kliknięciu zakładki "Załóż konto" przez funkcję switchTab().
+         autocomplete="new-password" zapobiega autouzupełnieniu hasłem z innej strony. -->
     <div id="panel-register" role="tabpanel" aria-labelledby="tab-register" hidden>
       <div class="form-group">
         <label for="r-name">Imię i nazwisko</label>
@@ -48,6 +79,8 @@
         <label for="r-pass">Hasło</label>
         <input type="password" id="r-pass" placeholder="min. 8 znaków" autocomplete="new-password">
       </div>
+      <!-- Rola użytkownika decyduje o tym, do jakiego widoku zostanie przekierowany
+           po rejestracji: investor.html (inwestor) lub contractor.html (wykonawca). -->
       <div class="form-group">
         <label for="r-role">Rola</label>
         <select id="r-role">
@@ -57,14 +90,24 @@
       </div>
       <button class="btn-primary" id="btn-register-submit">Utwórz konto</button>
     </div>
+
   </div>
 </div>
 
+<!--
+  Skrypt jako moduł ES (type="module") – umożliwia korzystanie ze składni import/export
+  oraz zapewnia własny zakres zmiennych (brak zanieczyszczenia przestrzeni globalnej window).
+  Firebase SDK ładowane bezpośrednio z CDN Google (gstatic), bez lokalnego bundlera.
+-->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
   import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
   import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
 
+  // ── Konfiguracja projektu Firebase ────────────────────────────────────────
+  // Dane publiczne projektu Firebase – identyfikują aplikację po stronie Google.
+  // Klucz apiKey w kontekście Firebase Web SDK nie jest sekretem – służy jedynie
+  // do identyfikacji projektu, a dostęp do danych chroniły reguły Firestore/Storage.
   const firebaseConfig = {
     apiKey: "AIzaSyCn3A18LpsZquFzOahvvuySUILNXZM_kwk",
     authDomain: "btpro-6fb00.firebaseapp.com",
@@ -74,10 +117,15 @@
     appId: "1:716860697893:web:42f51baccb483142853ecc"
   };
 
+  // Inicjalizacja aplikacji Firebase i pobranie instancji usług Auth oraz Firestore.
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
   const db = getFirestore(app);
 
+  // ── Przełącznik zakładek ───────────────────────────────────────────────────
+  // Funkcja przypisana do window, bo jest wywoływana z atrybutu onclick w HTML
+  // (moduły ES mają własny zakres – bez window.X funkcja byłaby niedostępna globalnie).
+  // Pokazuje odpowiedni panel i synchronizuje atrybuty ARIA zakładek.
   window.switchTab = function(which) {
     const loginTab = document.getElementById('tab-login');
     const registerTab = document.getElementById('tab-register');
@@ -94,28 +142,42 @@
     }
   }
 
-  // Odczytanie parametrów z URL do inteligentnego przekierowania
+  // ── Parametry URL do inteligentnego przekierowania ────────────────────────
+  // Gdy wykonawca otrzymuje link zaproszenia do projektu (np. z maila), URL może
+  // zawierać parametry ?returnTo=contractor.html&projekt=ID_PROJEKTU.
+  // Po zalogowaniu/rejestracji aplikacja przekierowuje go bezpośrednio do projektu,
+  // zamiast na ogólny pulpit – poprawia to UX i skraca ścieżkę dojścia do zadania.
   const urlParams = new URLSearchParams(window.location.search);
   const returnTo = urlParams.get('returnTo');
   const projekt = urlParams.get('projekt');
 
+  // ── Obsługa rejestracji nowego konta ──────────────────────────────────────
   document.getElementById('btn-register-submit').addEventListener('click', async () => {
     const name = document.getElementById('r-name').value;
     const email = document.getElementById('r-email').value;
     const pass = document.getElementById('r-pass').value;
     const roleSelect = document.getElementById('r-role').value;
-    
+
+    // Mapowanie wartości z selecta na klucze wewnętrzne.
+    // Zamiast przechowywać pełną nazwę opcji, zapisujemy zwięzły identyfikator roli
+    // ('investor' / 'contractor'), co ułatwia późniejsze warunki logiki biznesowej.
     const role = roleSelect.includes('Inwestor') ? 'investor' : 'contractor';
 
+    // Prosta walidacja po stronie klienta przed wywołaniem API.
     if(!name || !email || !pass) {
         alert('Proszę wypełnić wszystkie pola!');
         return;
     }
 
     try {
+      // Tworzenie konta w Firebase Authentication (email + hasło).
+      // Firebase automatycznie sprawdza format e-maila i minimalną długość hasła.
       const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
       const user = userCredential.user;
 
+      // Zapis profilu użytkownika w kolekcji "users" Firestore.
+      // Dokument jest identyfikowany przez UID z Firebase Auth – zapewnia
+      // spójność między systemem uwierzytelniania a bazą danych.
       await setDoc(doc(db, "users", user.uid), {
         name: name,
         email: email,
@@ -124,20 +186,24 @@
       });
 
       alert('Konto założone pomyślnie!');
-      
-      // Inteligentne przekierowanie po rejestracji
+
+      // Inteligentne przekierowanie po rejestracji:
+      // - Jeśli w URL są parametry zaproszenia ORAZ użytkownik jest wykonawcą
+      //   → przekieruj bezpośrednio do wskazanego projektu (returnTo + projekt).
+      // - W przeciwnym razie → przekieruj na domyślny pulpit odpowiedni dla roli.
       if (returnTo && projekt && role === 'contractor') {
           window.location.href = `${returnTo}?projekt=${projekt}`;
       } else {
           window.location.href = role === 'investor' ? 'investor.html' : 'contractor.html';
       }
-      
+
     } catch (error) {
       console.error("Błąd podczas rejestracji:", error);
       alert('Nie udało się utworzyć konta: ' + error.message);
     }
   });
 
+  // ── Obsługa logowania istniejącego użytkownika ────────────────────────────
   document.getElementById('btn-login-submit').addEventListener('click', async () => {
     const email = document.getElementById('l-email').value;
     const pass = document.getElementById('l-pass').value;
@@ -148,21 +214,28 @@
     }
 
     try {
+      // Uwierzytelnianie przez Firebase Auth – zwraca obiekt użytkownika z UID.
       const userCredential = await signInWithEmailAndPassword(auth, email, pass);
       const user = userCredential.user;
 
+      // Pobieramy profil użytkownika z Firestore, aby poznać jego rolę.
+      // Firebase Auth przechowuje tylko dane uwierzytelniające (email, hasło),
+      // natomiast dane aplikacyjne (rola, imię) są w Firestore.
       const userDoc = await getDoc(doc(db, "users", user.uid));
-      
+
       if (userDoc.exists()) {
         const userData = userDoc.data();
-        
-        // Inteligentne przekierowanie po logowaniu
+
+        // Ta sama logika inteligentnego przekierowania co przy rejestracji –
+        // wykonawca z linkiem zaproszenia trafia prosto do projektu.
         if (returnTo && projekt && userData.role === 'contractor') {
             window.location.href = `${returnTo}?projekt=${projekt}`;
         } else {
             window.location.href = userData.role === 'investor' ? 'investor.html' : 'contractor.html';
         }
       } else {
+        // Edge case: konto istnieje w Firebase Auth, ale brakuje dokumentu w Firestore.
+        // Może się zdarzyć gdy rejestracja przerwała się po createUser, przed setDoc.
         alert('Konto istnieje, ale brak jego profilu w bazie.');
       }
 
