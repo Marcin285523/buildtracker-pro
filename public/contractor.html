@@ -4,12 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Panel Wykonawcy — BuildTracker Pro</title>
+  <!-- Czcionka DM Sans – ta sama co w pozostałych widokach aplikacji. -->
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
+<!-- Główny kontener widoku wykonawcy. Klasa "view" używana przez mechanizm SPA
+     do przełączania widoczności widoków bez przeładowania strony. -->
 <div id="contractor" class="view">
+
+  <!-- ── Pasek nawigacyjny ──────────────────────────────────────────────────
+       #user-display jest wypełniany przez JS po potwierdzeniu sesji i pobraniu
+       imienia z Firestore – dlatego domyślny tekst to "Ładowanie...". -->
   <nav>
     <div class="logo">Build<span>Tracker</span><em>Pro</em></div>
     <div class="nav-right">
@@ -18,7 +25,15 @@
     </div>
   </nav>
 
+  <!-- ── Główny UI panelu wykonawcy (domyślnie ukryty) ─────────────────────
+       Ukryty na starcie (display:none), bo JS musi najpierw zweryfikować:
+         1. Czy użytkownik jest zalogowany,
+         2. Czy ma rolę 'contractor',
+         3. Czy projekt z podanego URL faktycznie istnieje w Firestore.
+       Dopiero po pozytywnej weryfikacji ten element staje się widoczny. -->
   <main class="main-content" id="main-ui" style="display: none;">
+
+    <!-- Nagłówek projektu: nazwa i opis pobierane z Firestore i wstawiane przez JS. -->
     <div class="project-header">
       <div>
         <h1 class="project-title" id="proj-name">Nazwa Inwestycji</h1>
@@ -29,45 +44,81 @@
     <div class="two-col">
       <aside>
         <div class="sidebar">
+
+          <!-- ── Dokumentacja inwestora (tylko do odczytu) ──────────────────
+               Wykonawca widzi te same pliki co inwestor, ale nie może ich
+               dodawać ani usuwać – brak przycisków zarządzania. -->
           <div class="sidebar-card">
             <h2>Dokumentacja i Plany</h2>
             <div id="doc-list-contractor"></div>
           </div>
+
+          <!-- ── Lista materiałów inwestora (tylko do odczytu) ──────────────
+               Podobnie jak dokumenty – renderowana z danych projektu,
+               bez możliwości edycji po stronie wykonawcy. -->
           <div class="sidebar-card">
             <h2>Lista materiałów</h2>
             <div id="mat-list-contractor"></div>
           </div>
+
         </div>
       </aside>
 
       <section>
+
+        <!-- ── Formularz dodawania raportu ───────────────────────────────────
+             Raport może zawierać: tekst wpisany ręcznie, tekst podyktowany
+             głosowo (transkrybowany przez Cloud Function) lub zdjęcia
+             (wgrywane do Firebase Storage i klasyfikowane przez Cloud Vision). -->
         <div class="sidebar-card" style="margin-bottom: 30px;">
           <h2 style="margin-bottom: 15px;">Dodaj raport z postępu prac</h2>
           <textarea id="report-text" placeholder="Opisz co dzisiaj zrobiono, co kupiono lub jakie są problemy..." style="width: 100%; min-height: 80px; margin-bottom: 10px;"></textarea>
+
           <div style="display: flex; gap: 10px; align-items: center;">
+            <!-- Ukryty input wyzwalany programowo przez przycisk poniżej.
+                 accept="image/*" ogranicza wybór do plików graficznych;
+                 multiple pozwala wybrać kilka zdjęć naraz. -->
             <input type="file" id="report-file" style="display: none;" accept="image/*" multiple>
             <button class="btn-demo" onclick="document.getElementById('report-file').click()" id="btn-file-label">📸 Dodaj zdjęcia</button>
+
+            <!-- Przycisk mikrofonu: pierwsze kliknięcie = start nagrywania,
+                 drugie kliknięcie = stop + wysłanie do Cloud Function transkrypcji. -->
             <button class="btn-demo" id="btn-mic" title="Naciśnij, aby zacząć nagrywać dla Google Cloud">🎤 Dyktuj</button>
+
             <button class="btn-primary" id="btn-send-report" style="flex: 1;">Wyślij raport</button>
           </div>
+
+          <!-- Informacja o liczbie wybranych plików – aktualizowana przez listener
+               na #report-file po wyborze zdjęć. -->
           <p id="file-status" style="font-size: 11px; color: var(--primary); margin-top: 5px;"></p>
         </div>
 
+        <!-- ── Oś czasu raportów ─────────────────────────────────────────────
+             Wypełniana w czasie rzeczywistym przez onSnapshot – każdy nowy
+             raport od wykonawcy pojawia się tu bez odświeżania strony. -->
         <h2 class="section-title">Oś czasu (Historia prac)</h2>
         <div id="timeline" class="timeline-track">
           <p style="color: var(--text-muted);">Ładowanie raportów...</p>
         </div>
+
       </section>
     </div>
   </main>
 
+  <!-- ── Ekran błędu dostępu (domyślnie ukryty) ───────────────────────────
+       Wyświetlany zamiast głównego UI gdy weryfikacja sesji lub projektu
+       zakończy się niepowodzeniem. Treść akapitu <p> jest nadpisywana
+       przez showError() z konkretnym komunikatem błędu. -->
   <div id="no-project-error" style="display: none; text-align: center; padding: 3rem;">
     <h1>Ups! Brak dostępu.</h1>
     <p>Ten link jest nieprawidłowy lub nie masz uprawnień do tego projektu.</p>
     <button class="btn-primary" onclick="window.location.href='index.html'" style="margin-top: 20px;">Wróć do logowania</button>
   </div>
+
 </div>
 
+<!-- Toast powiadomienie – bez atrybutów ARIA (w odróżnieniu od investor.html),
+     co jest rozbieżnością wartą ujednolicenia w przyszłości. -->
 <div class="toast" id="toast"></div>
 
 <script type="module">
@@ -75,8 +126,12 @@
   import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
   import { getFirestore, doc, getDoc, collection, addDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
   import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-storage.js";
+  // getFunctions + httpsCallable potrzebne do wywołania Cloud Functions:
+  //   transcribeAudio – transkrypcja nagrania głosowego (Speech-to-Text)
+  //   analyzeImage    – klasyfikacja zdjęcia jako Dokument/Zdjęcie (Cloud Vision)
   import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-functions.js";
 
+  // ── Konfiguracja Firebase ─────────────────────────────────────────────────
   const firebaseConfig = {
     apiKey: "AIzaSyCn3A18LpsZquFzOahvvuySUILNXZM_kwk",
     authDomain: "btpro-6fb00.firebaseapp.com",
@@ -90,15 +145,23 @@
   const auth = getAuth(app);
   const db = getFirestore(app);
   const storage = getStorage(app);
-  
+
+  // Inicjalizacja klienta Cloud Functions i referencje do konkretnych funkcji.
+  // httpsCallable zwraca wrapper, który można wywołać jak zwykłą async funkcję JS.
   const cloudFunctions = getFunctions(app);
   const transcribeAudio = httpsCallable(cloudFunctions, 'transcribeAudio');
-  const analyzeImage = httpsCallable(cloudFunctions, 'analyzeImage'); 
+  const analyzeImage    = httpsCallable(cloudFunctions, 'analyzeImage');
 
-  let currentUserName = "Wykonawca";
+  // ── Stan aplikacji ────────────────────────────────────────────────────────
+  let currentUserName = "Wykonawca"; // Imię pobierane z Firestore po zalogowaniu
+
+  // Identyfikator projektu przekazywany jako parametr URL ?projekt=UID_INWESTORA.
+  // UID inwestora jest jednocześnie ID dokumentu projektu w Firestore.
   let projectId = new URLSearchParams(window.location.search).get('projekt');
 
-  // Funkcja pomocnicza do wyświetlania błędów
+  // ── Funkcja pomocnicza: wyświetlanie ekranu błędu ─────────────────────────
+  // Ukrywa główny UI i pokazuje ekran błędu z podanym komunikatem.
+  // Wywoływana przy nieudanej weryfikacji roli, brakującym projekcie itp.
   function showError(message) {
     document.getElementById('main-ui').style.display = 'none';
     const errorDiv = document.getElementById('no-project-error');
@@ -106,10 +169,13 @@
     errorDiv.querySelector('p').textContent = message;
   }
 
+  // ── Strażnik sesji + weryfikacja roli ─────────────────────────────────────
+  // onAuthStateChanged uruchamia się natychmiast przy załadowaniu strony
+  // (z sesji zapisanej lokalnie) lub przy zmianie stanu logowania.
   onAuthStateChanged(auth, async (user) => {
     if (user) {
       const uDoc = await getDoc(doc(db, "users", user.uid));
-      
+
       if (!uDoc.exists()) {
         showError("Nie znaleziono profilu użytkownika w bazie.");
         return;
@@ -117,7 +183,9 @@
 
       const userData = uDoc.data();
 
-      // Weryfikacja: Tylko użytkownicy z rolą 'contractor' mogą zobaczyć ten widok
+      // Weryfikacja roli po stronie klienta: inwestor nie powinien mieć dostępu
+      // do panelu wykonawcy. Właściwe zabezpieczenie musi być też w regułach Firestore,
+      // bo kod JS można ominąć przez manipulację w przeglądarce.
       if (userData.role !== 'contractor') {
         showError("Ups! Brak dostępu. To konto nie ma uprawnień Wykonawcy.");
         return;
@@ -125,37 +193,46 @@
 
       currentUserName = userData.name || "Wykonawca";
       document.getElementById('user-display').textContent = `Wykonawca: ${currentUserName}`;
-      
+
       if (!projectId) {
         showError("Brak identyfikatora projektu w adresie URL.");
       } else {
         initContractorPage();
       }
     } else {
-      // Jeśli użytkownik nie jest zalogowany, odeślij go do index.html z parametrami powrotu
+      // Niezalogowany użytkownik: przekierowanie na stronę logowania z parametrami
+      // returnTo i projekt, dzięki którym po zalogowaniu wróci do tego samego projektu
+      // (mechanizm inteligentnego przekierowania opisany w index.html).
       window.location.href = `index.html?returnTo=contractor.html&projekt=${projectId || ''}`;
     }
   });
 
+  // ── Inicjalizacja panelu wykonawcy ────────────────────────────────────────
+  // Wywołana po pozytywnej weryfikacji sesji i roli. Pobiera dane projektu
+  // i uruchamia nasłuchiwanie na raporty w czasie rzeczywistym.
   async function initContractorPage() {
     const pDoc = await getDoc(doc(db, "projects", projectId));
     if (!pDoc.exists()) {
       showError("Ten link jest nieprawidłowy lub projekt już nie istnieje.");
       return;
     }
+
+    // Projekt istnieje – ukrywamy ekran błędu i pokazujemy główny UI.
     document.getElementById('no-project-error').style.display = 'none';
     document.getElementById('main-ui').style.display = 'block';
-    
+
     const data = pDoc.data();
-    
     document.getElementById('proj-name').textContent = data.name;
     document.getElementById('proj-desc').textContent = data.description;
 
+    // ── Renderowanie listy materiałów (tylko do odczytu) ──────────────────
+    // Fallback z || na wypadek projektu bez zdefiniowanej listy materiałów.
     const mList = document.getElementById('mat-list-contractor');
     mList.innerHTML = (data.materials || []).map(m => `
       <div class="mat-row"><span class="mat-name">${m.name}</span><span class="mat-qty">${m.quantity}</span></div>
     `).join('') || '<p class="empty-list">Brak listy materiałów.</p>';
 
+    // ── Renderowanie listy dokumentów (tylko do odczytu) ──────────────────
     const dList = document.getElementById('doc-list-contractor');
     dList.innerHTML = (data.documents || []).map(d => `
       <div class="doc-item">
@@ -165,16 +242,27 @@
       </div>
     `).join('') || '<p class="empty-list">Brak dokumentacji.</p>';
 
+    // ── Subskrypcja na raporty w czasie rzeczywistym ──────────────────────
+    // onSnapshot aktualizuje oś czasu natychmiast gdy inny wykonawca lub
+    // ten sam użytkownik doda raport – bez potrzeby odświeżania strony.
+    // Raporty posortowane malejąco: najnowszy na górze osi czasu.
     const q = query(collection(db, `projects/${projectId}/reports`), orderBy("createdAt", "desc"));
     onSnapshot(q, (snapshot) => {
       const timeline = document.getElementById('timeline');
+
       timeline.innerHTML = snapshot.docs.map(doc => {
         const r = doc.data();
         const date = r.createdAt?.toDate().toLocaleString() || 'Przed chwilą';
-        
+
+        // ── Obsługa trzech formatów zdjęć (kompatybilność wsteczna) ───────
+        // Schemat danych ewoluował przez kolejne wersje aplikacji:
+        //   r.imageUrl   (string) – jeden URL, najstarsza wersja
+        //   r.imageUrls  (array)  – wiele URL-i bez tagów AI
+        //   r.images     (array)  – obiekty {url, tag} z tagiem AI, wersja aktualna
         let imagesHtml = '';
-        
+
         if (r.images && r.images.length > 0) {
+          // Aktualna wersja: kolorowa odznaka tagu AI na każdym zdjęciu.
           imagesHtml = `<div class="report-images" style="margin-top: 10px;">` + r.images.map(img => `
               <div style="position: relative; display: inline-block; margin-right: 10px; margin-bottom: 10px;">
                   <a href="${img.url}" target="_blank"><img src="${img.url}" class="report-img" alt="Załącznik"></a>
@@ -182,8 +270,10 @@
               </div>
           `).join('') + `</div>`;
         } else if (r.imageUrls && r.imageUrls.length > 0) {
+          // Pośrednia wersja: tablica URL-i bez tagów.
           imagesHtml = `<div class="report-images" style="margin-top: 10px;">` + r.imageUrls.map(url => `<a href="${url}" target="_blank"><img src="${url}" class="report-img" alt="Zdjęcie z budowy" style="margin-right: 10px; margin-bottom: 10px;"></a>`).join('') + `</div>`;
         } else if (r.imageUrl) {
+          // Najstarsza wersja: pojedynczy URL jako string.
           imagesHtml = `<div class="report-images" style="margin-top: 10px;"><a href="${r.imageUrl}" target="_blank"><img src="${r.imageUrl}" class="report-img" alt="Zdjęcie z budowy"></a></div>`;
         }
 
@@ -201,6 +291,9 @@
     });
   }
 
+  // ── Obsługa wyboru zdjęć ──────────────────────────────────────────────────
+  // selectedFiles przechowuje tablicę plików wybranych przez użytkownika.
+  // Jest resetowana po wysłaniu raportu, by nie powielać zdjęć w kolejnym raporcie.
   let selectedFiles = [];
   document.getElementById('report-file').addEventListener('change', (e) => {
     selectedFiles = Array.from(e.target.files);
@@ -211,8 +304,10 @@
     }
   });
 
+  // ── Wysyłanie raportu ─────────────────────────────────────────────────────
   document.getElementById('btn-send-report').addEventListener('click', async () => {
     const text = document.getElementById('report-text').value.trim();
+    // Blokada wysyłania pustego raportu: wymagany jest tekst LUB przynajmniej jedno zdjęcie.
     if (!text && selectedFiles.length === 0) return;
 
     const btn = document.getElementById('btn-send-report');
@@ -220,31 +315,45 @@
     btn.textContent = "Wysyłanie...";
 
     try {
-      let imagesData = []; 
-      
+      let imagesData = []; // Tablica obiektów {url, tag} do zapisania w Firestore
+
       if (selectedFiles.length > 0) {
+        // Przetwarzamy zdjęcia sekwencyjnie (for...of z await), bo każde zdjęcie
+        // wymaga kolejno: upload do Storage → pobranie URL → analiza AI.
+        // Równoległe przetwarzanie (Promise.all) byłoby szybsze, ale trudniejsze
+        // do debugowania i mogłoby przeciążyć Cloud Functions przy wielu plikach.
         for (let file of selectedFiles) {
+          // Ścieżka w Storage: reports/{projectId}/{timestamp}_{nazwapliku}
+          // Timestamp zapobiega konfliktom przy wgraniu plików o tej samej nazwie.
           const path = `reports/${projectId}/${Date.now()}_${file.name}`;
           const sRef = ref(storage, path);
-          
+
           await uploadBytes(sRef, file);
           const url = await getDownloadURL(sRef);
-          
+
+          // Wywołanie Cloud Function analyzeImage z przekazaniem ścieżki do pliku
+          // w Storage (nie URL-a) – Cloud Function pobiera plik bezpośrednio
+          // przez Firebase Admin SDK i wysyła go do Google Cloud Vision.
           window.showToast("AI analizuje zdjęcie... ⏳");
-          let tag = "Zdjęcie";
+          let tag = "Zdjęcie"; // Domyślny tag, gdy analiza AI się nie powiedzie
           try {
-             const aiResult = await analyzeImage({ filePath: path });
-             if (aiResult && aiResult.data && aiResult.data.tag) {
-                 tag = aiResult.data.tag;
-             }
+            const aiResult = await analyzeImage({ filePath: path });
+            if (aiResult && aiResult.data && aiResult.data.tag) {
+              tag = aiResult.data.tag;
+            }
           } catch(e) {
-             console.error("Nie udało się pobrać tagu AI:", e);
+            // Błąd analizy AI nie przerywa wysyłania raportu – zdjęcie dostaje tag
+            // domyślny "Zdjęcie" i jest zapisywane normalnie.
+            console.error("Nie udało się pobrać tagu AI:", e);
           }
 
           imagesData.push({ url: url, tag: tag });
         }
       }
 
+      // Zapis raportu jako nowy dokument w podkolekcji raportów projektu.
+      // addDoc generuje losowe ID dokumentu (w przeciwieństwie do setDoc z ręcznym ID).
+      // onSnapshot w initContractorPage wykryje tę zmianę i automatycznie odświeży oś czasu.
       await addDoc(collection(db, `projects/${projectId}/reports`), {
         text,
         images: imagesData,
@@ -252,77 +361,106 @@
         createdAt: new Date()
       });
 
+      // Reset formularza po pomyślnym wysłaniu.
       document.getElementById('report-text').value = '';
       document.getElementById('report-file').value = '';
       document.getElementById('file-status').textContent = '';
       selectedFiles = [];
       window.showToast("✓ Raport został wysłany!");
+
     } catch (err) {
       console.error(err);
       window.showToast("⚠ Błąd wysyłania raportu.", "error");
     } finally {
+      // Blok finally przywraca przycisk niezależnie od sukcesu lub błędu.
       btn.disabled = false;
       btn.textContent = "Wyślij raport";
     }
   });
 
-  const btnMic = document.getElementById('btn-mic');
+  // ── Dyktowanie głosowe ────────────────────────────────────────────────────
+  // Przepływ: mikrofon przeglądarki → MediaRecorder (WEBM/Opus) → base64 →
+  //           Cloud Function transcribeAudio → Google Speech-to-Text → tekst w textarea.
+
+  const btnMic  = document.getElementById('btn-mic');
   const textArea = document.getElementById('report-text');
   let mediaRecorder;
-  let audioChunks = [];
+  let audioChunks = []; // Kolekcja fragmentów audio zbieranych przez MediaRecorder
 
   async function startRecording() {
     try {
+      // Żądanie dostępu do mikrofonu z wymuszonymi parametrami audio:
+      //   channelCount: 1 – mono, wystarczające dla mowy, mniejszy rozmiar pliku
+      //   sampleRate: 48000 – musi zgadzać się z konfiguracją w Cloud Function
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, sampleRate: 48000 } });
+
+      // MediaRecorder z wymuszonym formatem WEBM/Opus – obsługiwanym przez Chrome i Firefox.
+      // Format musi być identyczny z tym, czego oczekuje Cloud Function transcribeAudio.
       mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
-      
+
+      // Callback zbierający fragmenty nagrania do tablicy audioChunks.
+      // MediaRecorder dzieli nagranie na kawałki (chunki) co kilkaset ms.
       mediaRecorder.ondataavailable = event => {
         if (event.data.size > 0) {
           audioChunks.push(event.data);
         }
       };
 
+      // Callback uruchamiany po wywołaniu mediaRecorder.stop().
+      // Scala wszystkie chunki w jeden Blob i wysyła go do Cloud Function.
       mediaRecorder.onstop = async () => {
         btnMic.innerHTML = '⏳ Tłumaczenie...';
         btnMic.disabled = true;
 
+        // Scalanie fragmentów audio w jeden plik WEBM/Opus.
         const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
-        audioChunks = [];
+        audioChunks = []; // Reset tablicy na potrzeby kolejnego nagrania
 
+        // FileReader konwertuje Blob na data URL (base64), bo JSON (używany przez
+        // Firebase Functions) nie obsługuje binarnych danych bezpośrednio.
+        // split(',')[1] odcina prefiks "data:audio/webm;base64," – zostawiając sam base64.
         const reader = new FileReader();
         reader.readAsDataURL(audioBlob);
         reader.onloadend = async () => {
           const base64Audio = reader.result.split(',')[1];
-          
+
           try {
             const result = await transcribeAudio({ audio: base64Audio });
             const translatedText = result.data.text;
 
             if (translatedText) {
-               if (textArea.value.length > 0 && !textArea.value.endsWith(' ')) {
-                 textArea.value += ' ' + translatedText;
-               } else {
-                 textArea.value += translatedText;
-               }
-               window.showToast("✓ Głos przetłumaczony!");
+              // Inteligentne dołączanie tekstu: jeśli pole nie jest puste i nie kończy
+              // się spacją, dodajemy spację przed nową porcją tekstu, by słowa
+              // się nie sklejały przy wielokrotnym dyktowaniu.
+              if (textArea.value.length > 0 && !textArea.value.endsWith(' ')) {
+                textArea.value += ' ' + translatedText;
+              } else {
+                textArea.value += translatedText;
+              }
+              window.showToast("✓ Głos przetłumaczony!");
             } else {
-               window.showToast("⚠ Nie rozpoznano żadnych słów.");
+              window.showToast("⚠ Nie rozpoznano żadnych słów.");
             }
           } catch (error) {
             console.error(error);
             window.showToast("⚠ Błąd serwera podczas tłumaczenia.", "error");
           } finally {
-             btnMic.innerHTML = '🎤 Dyktuj';
-             btnMic.disabled = false;
-             btnMic.style.color = '';
-             btnMic.style.borderColor = '';
-             btnMic.style.background = '';
+            // Przywrócenie przycisku mikrofonu do stanu domyślnego po zakończeniu
+            // transkrypcji – niezależnie od tego, czy się udała.
+            btnMic.innerHTML = '🎤 Dyktuj';
+            btnMic.disabled = false;
+            btnMic.style.color = '';
+            btnMic.style.borderColor = '';
+            btnMic.style.background = '';
           }
         };
 
+        // Zwolnienie ścieżki audio (mikrofonu) po zakończeniu nagrania.
+        // Bez tego przeglądarka nadal pokazuje ikonę "mikrofon aktywny" w zakładce.
         mediaRecorder.stream.getTracks().forEach(track => track.stop());
       };
 
+      // Start nagrywania i wizualna sygnalizacja aktywnego mikrofonu (czerwony styl).
       mediaRecorder.start();
       btnMic.innerHTML = '🛑 Nagrywam...';
       btnMic.style.color = '#ef4444';
@@ -330,11 +468,15 @@
       btnMic.style.background = '#fef2f2';
 
     } catch (err) {
+      // Najczęstszy błąd: użytkownik odmówił dostępu do mikrofonu w przeglądarce.
       console.error(err);
       window.showToast("⚠ Brak dostępu do mikrofonu.", "error");
     }
   }
 
+  // Przycisk mikrofonu działa jako toggle:
+  //   - jeśli nagrywanie trwa → stop (wywołuje mediaRecorder.onstop → transkrypcja)
+  //   - jeśli nie nagrywa     → start nagrywania
   btnMic.addEventListener('click', () => {
     if (mediaRecorder && mediaRecorder.state === 'recording') {
       mediaRecorder.stop();
@@ -343,7 +485,10 @@
     }
   });
 
+  // ── Funkcje globalne ──────────────────────────────────────────────────────
+
   window.logout = function() { signOut(auth).then(() => window.location.href = 'index.html'); };
+
   window.showToast = function(msg, type) {
     const t = document.getElementById('toast');
     t.textContent = msg;
