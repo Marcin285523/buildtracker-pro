@@ -4,17 +4,36 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Panel Inwestora — BuildTracker Pro</title>
+  <!--
+    Czcionka DM Sans z Google Fonts – ta sama co na stronie logowania,
+    dla spójności typograficznej całej aplikacji.
+  -->
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
-  
+
+  <!--
+    Biblioteki ładowane synchronicznie w <head> (nie jako moduły ES), bo są
+    potrzebne w handlerze przycisku ZIP, który wywołuje je przez window.JSZip / saveAs.
+    JSZip     – tworzenie archiwów ZIP w przeglądarce (po stronie klienta, bez serwera).
+    FileSaver – zapis wygenerowanego bloba jako pliku na dysku użytkownika.
+  -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 </head>
 <body>
 
+<!-- Link dostępności: widoczny tylko przy nawigacji klawiaturą (Tab).
+     Pozwala pominąć pasek nawigacyjny i przejść od razu do treści strony. -->
 <a href="#main" class="skip-link">Przejdź do treści głównej</a>
 
+<!-- Główny kontener widoku inwestora. Klasa "view" jest używana przez mechanizm
+     przełączania widoków SPA – wyświetlany jest tylko jeden widok naraz. -->
 <div id="investor" class="view">
+
+  <!-- ── Pasek nawigacyjny ──────────────────────────────────────────────────
+       aria-label na <nav> opisuje czytnikowi ekranu, czego dotyczy ta nawigacja.
+       aria-live="polite" na .nav-user sprawia, że gdy JS wpisze imię użytkownika
+       po zalogowaniu, czytnik ekranu odczyta je bez przerywania bieżącego odczytu. -->
   <nav aria-label="Nawigacja główna">
     <div class="logo" aria-label="BuildTracker Pro">Build<span>Tracker</span><em>Pro</em></div>
     <div class="nav-right">
@@ -24,7 +43,10 @@
   </nav>
 
   <main class="main-content" id="main">
-    
+
+    <!-- ── Nagłówek projektu (tryb podglądu) ────────────────────────────────
+         Ten blok jest widoczny domyślnie. Gdy użytkownik kliknie "Edytuj",
+         JS go ukrywa i pokazuje formularz #project-edit-form poniżej. -->
     <div class="project-header" id="project-header-view">
       <div style="flex: 1;">
         <h1 class="project-title" id="display-project-name">Brak aktywnego projektu</h1>
@@ -33,10 +55,16 @@
         </p>
         <div style="display: flex; gap: 10px; margin-top: 15px;">
             <button class="btn-demo" id="btn-edit-project" style="max-width: 200px;">Edytuj dane projektu</button>
+            <!-- Przycisk ZIP: po kliknięciu generuje archiwum ze wszystkimi raportami i zdjęciami.
+                 Zielony kolor (bg #16a34a) wyróżnia go wizualnie jako akcję eksportu/pobierania. -->
             <button class="btn-primary" id="btn-download-zip" style="max-width: 200px; background-color: #16a34a; border-color: #16a34a;">📦 Pobierz jako ZIP</button>
         </div>
       </div>
-      
+
+      <!-- ── Link dostępu dla wykonawcy ──────────────────────────────────────
+           Po zapisaniu projektu JS generuje tu URL zawierający UID inwestora jako
+           parametr ?projekt=UID. Wykonawca otwiera ten link i od razu trafia
+           do właściwego projektu bez konieczności ręcznego wpisywania ID. -->
       <div class="access-box" aria-label="Link dostępu dla wykonawcy">
         <div class="access-box-label">Dostęp dla Wykonawcy</div>
         <div class="access-url-row">
@@ -46,6 +74,10 @@
       </div>
     </div>
 
+    <!-- ── Formularz edycji projektu (domyślnie ukryty) ──────────────────────
+         Wyświetlany przez JS po kliknięciu "Edytuj dane projektu".
+         display:none zamiast hidden, bo style inline są tu potrzebne do animacji
+         przełączania między flex (headerView) a block (editForm). -->
     <div id="project-edit-form" style="display: none; background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border-card); margin-bottom: 2rem;">
       <h2 style="font-size: 16px; margin-bottom: 1rem;">Ustawienia Inwestycji</h2>
       <div class="form-group">
@@ -61,14 +93,24 @@
             <button class="btn-primary" id="btn-save-project" style="max-width: 200px;">Zapisz zmiany</button>
             <button class="btn-demo" id="btn-cancel-project" style="max-width: 150px; margin-left: 10px;">Anuluj</button>
         </div>
+        <!-- Przycisk usunięcia projektu wymagający dwukrotnego potwierdzenia –
+             celowo umieszczony po przeciwnej stronie, z dala od "Zapisz", by zapobiec
+             przypadkowemu kliknięciu. -->
         <button class="btn-danger-outline" id="btn-delete-project">Usuń projekt całkowicie</button>
       </div>
     </div>
 
+    <!-- ── Układ dwukolumnowy: panel boczny + oś czasu raportów ─────────────
+         <aside> na panel boczny (dokumenty, materiały) i <section> na raporty
+         to semantyczny HTML – pomaga czytnikowi ekranu w orientacji na stronie. -->
     <div class="two-col">
       <aside aria-label="Panel boczny">
         <div class="sidebar">
-          
+
+          <!-- ── Dokumentacja i Plany ──────────────────────────────────────
+               Ukryty <input type="file"> jest wyzwalany programowo przez
+               btn-upload-doc.click() – pozwala ostylować przycisk dowolnie,
+               omijając niestylowalne natywne pole wyboru pliku. -->
           <div class="sidebar-card">
             <h2>Dokumentacja i Plany</h2>
             <div id="documents-list">
@@ -78,6 +120,10 @@
             <button class="btn-add" id="btn-upload-doc" aria-label="Wgraj nowy dokument">+ Wgraj nowy plik</button>
           </div>
 
+          <!-- ── Lista materiałów ──────────────────────────────────────────
+               Materiały są przechowywane jako tablica w dokumencie projektu
+               w Firestore (nie jako oddzielna kolekcja), co upraszcza odczyt
+               i ogranicza liczbę zapytań do bazy. -->
           <div class="sidebar-card">
             <h2>Lista materiałów</h2>
             <div id="materials-list">
@@ -89,10 +135,13 @@
             </div>
             <button class="btn-add" id="btn-add-material">+ Dodaj materiał</button>
           </div>
-          
+
         </div>
       </aside>
 
+      <!-- ── Oś czasu raportów ─────────────────────────────────────────────
+           role="list" informuje technologie asystujące, że zawartość jest listą
+           (nawet jeśli nie używamy <ul>/<li>), co poprawia nawigację klawiaturą. -->
       <section aria-label="Raporty z budowy">
         <h2 class="section-title">Raporty z budowy (Oś czasu)</h2>
         <div id="timeline" class="timeline-track" role="list">
@@ -103,6 +152,12 @@
   </main>
 </div>
 
+<!--
+  Toast – niemodalne powiadomienie wyświetlane w rogu ekranu.
+  role="status" + aria-live="polite" + aria-atomic="true":
+    - powiadomienie jest odczytywane przez czytnik ekranu gdy pojawia się nowy tekst,
+    - aria-atomic zapewnia, że odczytana zostanie cała zawartość naraz, a nie tylko zmiana.
+-->
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <script type="module">
@@ -111,6 +166,9 @@
   import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, orderBy, onSnapshot, getDocs } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
   import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-storage.js";
 
+  // ── Konfiguracja Firebase ─────────────────────────────────────────────────
+  // Publiczne dane konfiguracyjne projektu – bezpieczne po stronie klienta,
+  // dostęp do zasobów chronią reguły Firestore i Storage po stronie serwera.
   const firebaseConfig = {
     apiKey: "AIzaSyCn3A18LpsZquFzOahvvuySUILNXZM_kwk",
     authDomain: "btpro-6fb00.firebaseapp.com",
@@ -125,65 +183,107 @@
   const db = getFirestore(app);
   const storage = getStorage(app);
 
-  let currentUser = null;
-  let currentProjectData = null;
-  let unsubscribeReports = null; 
+  // ── Stan aplikacji ────────────────────────────────────────────────────────
+  let currentUser = null;         // Obiekt zalogowanego użytkownika Firebase Auth
+  let currentProjectData = null;  // Dane projektu pobrane z Firestore (cache lokalny)
+  let unsubscribeReports = null;  // Funkcja do anulowania nasłuchiwania na raporty
+                                  // w Firestore (onSnapshot zwraca "unsubscribe token").
+                                  // Przechowujemy ją, by móc ją wywołać przed
+                                  // ponownym podłączeniem listenera (np. po odświeżeniu projektu).
 
-  const headerView = document.getElementById('project-header-view');
-  const editForm = document.getElementById('project-edit-form');
-  const displayName = document.getElementById('display-project-name');
-  const displayDesc = document.getElementById('display-project-desc');
-  const inputName = document.getElementById('input-project-name');
-  const inputDesc = document.getElementById('input-project-desc');
-  const contractorLink = document.getElementById('contractor-link');
+  // ── Referencje do elementów DOM ──────────────────────────────────────────
+  // Pobrane raz przy starcie i przypisane do zmiennych – wydajniejsze niż
+  // wielokrotne wywoływanie getElementById() w każdej funkcji.
+  const headerView       = document.getElementById('project-header-view');
+  const editForm         = document.getElementById('project-edit-form');
+  const displayName      = document.getElementById('display-project-name');
+  const displayDesc      = document.getElementById('display-project-desc');
+  const inputName        = document.getElementById('input-project-name');
+  const inputDesc        = document.getElementById('input-project-desc');
+  const contractorLink   = document.getElementById('contractor-link');
   const materialsListDiv = document.getElementById('materials-list');
   const documentsListDiv = document.getElementById('documents-list');
-  const timelineDiv = document.getElementById('timeline');
+  const timelineDiv      = document.getElementById('timeline');
 
+  // ── Strażnik sesji ────────────────────────────────────────────────────────
+  // onAuthStateChanged jest trwałym listenerem Firebase Auth – uruchamia się:
+  //   a) od razu przy załadowaniu strony (z sesji zapisanej w localStorage),
+  //   b) za każdym razem gdy stan uwierzytelnienia się zmienia (login/logout).
+  // To jedyny niezawodny sposób sprawdzenia sesji; nigdy nie używaj zmiennych
+  // globalnych do śledzenia "czy zalogowany" między odświeżeniami strony.
   onAuthStateChanged(auth, async (user) => {
     if (user) {
       currentUser = user;
+      // Pobieramy imię i rolę z Firestore, bo Firebase Auth nie przechowuje tych danych.
       const userDoc = await getDoc(doc(db, "users", user.uid));
       if (userDoc.exists()) {
         document.querySelector('.nav-user').textContent = `Zalogowany: ${userDoc.data().name} (Inwestor)`;
       }
       loadProjectData();
     } else {
+      // Brak sesji – przekierowanie na stronę logowania.
       window.location.href = 'index.html';
     }
   });
 
+  // ── Ładowanie danych projektu z Firestore ────────────────────────────────
+  // Projekt jest identyfikowany przez UID inwestora – jeden inwestor = jeden projekt.
+  // Taka struktura upraszcza reguły bezpieczeństwa Firestore (właściciel = auth.uid).
   async function loadProjectData() {
     const projectDoc = await getDoc(doc(db, "projects", currentUser.uid));
-    
+
     if (projectDoc.exists()) {
       currentProjectData = projectDoc.data();
+
+      // Aktualizacja widoku podglądu i pól formularza edycji.
       displayName.textContent = currentProjectData.name;
       displayDesc.textContent = currentProjectData.description;
       inputName.value = currentProjectData.name;
       inputDesc.value = currentProjectData.description;
-      
+
+      // Generowanie linku dla wykonawcy: wycinamy nazwę pliku z aktualnego URL
+      // (np. "https://domena.pl/app") i doklejamy ścieżkę do panelu wykonawcy
+      // z UID inwestora jako parametrem, który identyfikuje projekt.
       const currentUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/'));
       contractorLink.textContent = `${currentUrl}/contractor.html?projekt=${currentUser.uid}`;
-      
+
       renderMaterials(currentProjectData.materials || []);
       renderDocuments(currentProjectData.documents || []);
 
-      if (unsubscribeReports) unsubscribeReports(); 
+      // Anulowanie poprzedniego listenera raportów przed podłączeniem nowego.
+      // Bez tego wywołania stary listener działałby nadal w tle, powodując
+      // podwójne aktualizacje DOM i wycieki pamięci.
+      if (unsubscribeReports) unsubscribeReports();
+
+      // Subskrypcja w czasie rzeczywistym na kolekcję raportów projektu.
+      // onSnapshot uruchamia callback natychmiast (z danymi z cache lub serwera),
+      // a następnie przy każdej zmianie danych w Firestore – bez odświeżania strony.
+      // Raporty sortowane są malejąco po dacie, więc najnowszy jest na górze osi czasu.
       const q = query(collection(db, `projects/${currentUser.uid}/reports`), orderBy("createdAt", "desc"));
       unsubscribeReports = onSnapshot(q, (snapshot) => {
         if (snapshot.empty) {
           timelineDiv.innerHTML = '<p style="color: var(--text-muted); font-size: 14px;">Brak raportów. Kiedy Wykonawca doda pierwszy raport, pojawi się on tutaj.</p>';
           return;
         }
-        
+
+        // Budowanie HTML osi czasu przez mapowanie dokumentów Firestore na karty raportów.
         timelineDiv.innerHTML = snapshot.docs.map(docSnapshot => {
           const r = docSnapshot.data();
+          // Timestamp Firestore (obiekt) konwertujemy na czytelną datę lokalną.
+          // Fallback "Przed chwilą" na wypadek raportu bez pola createdAt.
           const date = r.createdAt?.toDate().toLocaleString() || 'Przed chwilą';
-          
+
+          // ── Obsługa trzech formatów zdjęć ──────────────────────────────
+          // Schemat danych ewoluował – stare raporty mogą używać:
+          //   r.imageUrl   (string) – jeden URL, najstarsza wersja
+          //   r.imageUrls  (array)  – wiele URL-i bez tagów, wersja pośrednia
+          //   r.images     (array)  – obiekty {url, tag} z tagiem AI Vision, wersja aktualna
+          // Kod obsługuje wszystkie trzy, zachowując kompatybilność wsteczną.
           let imagesHtml = '';
-          
+
           if (r.images && r.images.length > 0) {
+            // Aktualna wersja: każde zdjęcie ma tag AI ('Dokument' lub 'Zdjęcie').
+            // Kolor odznaki zależy od tagu: czerwony = dokument, niebieski = zdjęcie.
             imagesHtml = `<div class="report-images" style="margin-top: 10px;">` + r.images.map(img => `
                 <div style="position: relative; display: inline-block; margin-right: 10px; margin-bottom: 10px;">
                     <a href="${img.url}" target="_blank"><img src="${img.url}" class="report-img" alt="Załącznik"></a>
@@ -191,8 +291,10 @@
                 </div>
             `).join('') + `</div>`;
           } else if (r.imageUrls && r.imageUrls.length > 0) {
+            // Pośrednia wersja: tablica URL-i bez tagów.
             imagesHtml = `<div class="report-images" style="margin-top: 10px;">` + r.imageUrls.map(url => `<a href="${url}" target="_blank"><img src="${url}" class="report-img" alt="Zdjęcie z budowy" style="margin-right: 10px; margin-bottom: 10px;"></a>`).join('') + `</div>`;
           } else if (r.imageUrl) {
+            // Najstarsza wersja: pojedynczy URL jako string.
             imagesHtml = `<div class="report-images" style="margin-top: 10px;"><a href="${r.imageUrl}" target="_blank"><img src="${r.imageUrl}" class="report-img" alt="Zdjęcie z budowy"></a></div>`;
           }
 
@@ -210,6 +312,7 @@
       });
 
     } else {
+      // Projekt nie istnieje w Firestore – reset UI do stanu "brak projektu".
       currentProjectData = null;
       displayName.textContent = "Brak aktywnego projektu";
       displayDesc.textContent = "Dodaj nazwę i opis swojej inwestycji, aby rozpocząć.";
@@ -218,13 +321,17 @@
       contractorLink.textContent = "Zapisz projekt, aby wygenerować link...";
       renderMaterials([]);
       renderDocuments([]);
-      
+
+      // Anulowanie listenera raportów – nie ma projektu, więc nie ma czego słuchać.
       if (unsubscribeReports) { unsubscribeReports(); unsubscribeReports = null; }
       timelineDiv.innerHTML = '<p style="color: var(--text-muted); font-size: 14px;">Brak raportów. Zapisz projekt, aby Wykonawca mógł zacząć wysyłać raporty.</p>';
     }
   }
 
-  // --- MATERIAŁY ---
+  // ── MATERIAŁY ─────────────────────────────────────────────────────────────
+
+  // Renderuje listę materiałów z tablicy obiektów {name, quantity}.
+  // Każdy wiersz zawiera przycisk usunięcia przekazujący indeks do deleteMaterial().
   function renderMaterials(materialsArray) {
     materialsListDiv.innerHTML = '';
     if (materialsArray.length === 0) {
@@ -239,6 +346,9 @@
     });
   }
 
+  // Dodawanie materiału: odczytujemy bieżącą tablicę z cache (currentProjectData),
+  // dodajemy nowy wpis i zapisujemy całą tablicę z powrotem do Firestore.
+  // updateDoc aktualizuje tylko pole "materials", nie nadpisując reszty dokumentu.
   document.getElementById('btn-add-material').addEventListener('click', async () => {
     if (!currentProjectData) { window.showToast('⚠ Najpierw zapisz projekt!', 'error'); return; }
     const name = document.getElementById('mat-name').value.trim();
@@ -251,6 +361,9 @@
     loadProjectData();
   });
 
+  // Usuwanie materiału po indeksie: splice() modyfikuje tablicę w miejscu,
+  // po czym zaktualizowana tablica jest zapisywana z powrotem do Firestore.
+  // Funkcja musi być globalna (window.*), bo jest wywoływana z atrybutu onclick w HTML.
   window.deleteMaterial = async function(index) {
     const newMats = currentProjectData.materials;
     newMats.splice(index, 1);
@@ -258,7 +371,10 @@
     loadProjectData();
   };
 
-  // --- DOKUMENTY ---
+  // ── DOKUMENTY ─────────────────────────────────────────────────────────────
+
+  // Renderuje listę dokumentów. Każdy wpis zawiera link "Otwórz" (pobierany URL
+  // z Firebase Storage) oraz przycisk usunięcia z indeksem dla deleteDocument().
   function renderDocuments(docsArray) {
     documentsListDiv.innerHTML = '';
     if (docsArray.length === 0) {
@@ -282,11 +398,17 @@
     });
   }
 
+  // Kliknięcie widocznego przycisku "Wgraj" programowo wyzwala ukryty <input type="file">.
+  // Zabezpieczenie: nie pozwalamy wgrywać pliku, jeśli projekt nie jest jeszcze zapisany
+  // (brak dokumentu w Firestore = nie ma dokąd zapisać metadanych pliku).
   document.getElementById('btn-upload-doc').addEventListener('click', () => {
     if (!currentProjectData) { window.showToast('⚠ Najpierw zapisz projekt!', 'error'); return; }
     document.getElementById('file-upload').click();
   });
 
+  // Obsługa wgrywania pliku po wybraniu go przez użytkownika.
+  // Ścieżka w Storage: projects/{uid}/{timestamp}_{nazwapliku} – timestamp zapobiega
+  // konfliktom przy wgraniu dwóch plików o tej samej nazwie.
   document.getElementById('file-upload').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -295,15 +417,22 @@
       const path = `projects/${currentUser.uid}/${Date.now()}_${file.name}`;
       const sRef = ref(storage, path);
       await uploadBytes(sRef, file);
+      // getDownloadURL zwraca publiczny URL pliku w Firebase Storage,
+      // który jest zapisywany w Firestore i używany do linku "Otwórz".
       const url = await getDownloadURL(sRef);
       const newDocs = currentProjectData.documents || [];
-      newDocs.push({ name: file.name, url: url, storagePath: path }); 
+      // Zapisujemy zarówno URL (do wyświetlenia) jak i storagePath (do usunięcia).
+      newDocs.push({ name: file.name, url: url, storagePath: path });
       await updateDoc(doc(db, "projects", currentUser.uid), { documents: newDocs });
       window.showToast('✓ Plik wgrany!');
       loadProjectData();
     } catch (err) { window.showToast('⚠ Błąd wgrywania.', 'error'); }
   });
 
+  // Usuwanie dokumentu: najpierw usuwa plik z Firebase Storage (jeśli istnieje ścieżka),
+  // potem aktualizuje tablicę dokumentów w Firestore. Kolejność jest ważna –
+  // gdyby Firestore zaktualizował się pierwszy, a Storage rzucił błąd, metadane
+  // wskazywałyby na nieistniejący plik.
   window.deleteDocument = async function(index) {
     if (!confirm("Czy na pewno usunąć ten plik?")) return;
     const docToDelete = currentProjectData.documents[index];
@@ -320,7 +449,9 @@
     } catch (err) { console.error(err); window.showToast('⚠ Błąd usuwania.', 'error'); }
   };
 
-  // --- ZARZĄDZANIE PROJEKTEM ---
+  // ── ZARZĄDZANIE PROJEKTEM ─────────────────────────────────────────────────
+
+  // Przełączanie między widokiem podglądu a formularzem edycji.
   document.getElementById('btn-edit-project').addEventListener('click', () => {
     headerView.style.display = 'none'; editForm.style.display = 'block';
   });
@@ -329,10 +460,12 @@
     editForm.style.display = 'none'; headerView.style.display = 'flex';
   });
 
+  // Zapis projektu: setDoc z tym samym UID nadpisuje istniejący dokument lub tworzy nowy.
+  // Zachowujemy bieżące tablice materials i documents, by nie wyczyścić ich przy edycji nazwy.
   document.getElementById('btn-save-project').addEventListener('click', async () => {
     const name = inputName.value.trim();
     const desc = inputDesc.value.trim();
-    if(!name) return;
+    if(!name) return; // Nazwa projektu jest wymagana – opis może być pusty.
     try {
       await setDoc(doc(db, "projects", currentUser.uid), {
         name, description: desc, investorId: currentUser.uid,
@@ -346,7 +479,11 @@
     } catch (err) { window.showToast('⚠ Błąd zapisu.', 'error'); }
   });
 
-  // --- NOWY SYSTEM USUWANIA PROJEKTU (GŁĘBOKIE CZYSZCZENIE) ---
+  // ── Usuwanie projektu (głębokie czyszczenie) ──────────────────────────────
+  // Firestore nie usuwa podkolekcji automatycznie przy usunięciu dokumentu nadrzędnego.
+  // Dlatego musimy ręcznie pobrać i usunąć wszystkie raporty przed usunięciem projektu.
+  // Dwa kolejne confirm() to celowe zabezpieczenie przed przypadkowym kliknięciem –
+  // operacji nie da się cofnąć.
   document.getElementById('btn-delete-project').addEventListener('click', async () => {
     const confirm1 = confirm("UWAGA! To spowoduje całkowite usunięcie danych projektu, listy materiałów ORAZ WSZYSTKICH RAPORTÓW. Kontynuować?");
     if (!confirm1) return;
@@ -354,38 +491,41 @@
     if (!confirm2) return;
 
     try {
-      // 1. Zdefiniowanie ścieżki do kolekcji z raportami
+      // 1. Pobranie wszystkich raportów z podkolekcji projektu.
       const reportsRef = collection(db, `projects/${currentUser.uid}/reports`);
-      
-      // 2. Pobranie wszystkich raportów należących do tego projektu
       const reportsSnapshot = await getDocs(reportsRef);
-      
-      // 3. Usuwanie każdego pojedyncznego raportu
+
+      // 2. Usuwanie raportów równolegle (Promise.all) zamiast sekwencyjnie –
+      //    znacznie szybsze przy dużej liczbie raportów.
       const deletePromises = [];
       reportsSnapshot.forEach((reportDoc) => {
           deletePromises.push(deleteDoc(reportDoc.ref));
       });
-      
-      // Czekamy na wyczyszczenie całej podkolekcji
       await Promise.all(deletePromises);
 
-      // 4. Na koniec usuwamy główny dokument projektu
+      // 3. Usunięcie głównego dokumentu projektu dopiero po wyczyszczeniu podkolekcji.
       await deleteDoc(doc(db, "projects", currentUser.uid));
-      
+
       window.showToast('✓ Projekt i raporty zostały całkowicie usunięte.');
-      editForm.style.display = 'none'; 
+      editForm.style.display = 'none';
       headerView.style.display = 'flex';
       loadProjectData();
-    } catch (err) { 
+    } catch (err) {
         console.error(err);
-        window.showToast('⚠ Błąd usuwania projektu.', 'error'); 
+        window.showToast('⚠ Błąd usuwania projektu.', 'error');
     }
   });
 
-  // --- POBIERANIE PACZKI ZIP ---
+  // ── Generowanie archiwum ZIP ──────────────────────────────────────────────
+  // Cały ZIP jest tworzony po stronie klienta (w przeglądarce) bez udziału serwera:
+  //   1. Pobieramy listę raportów z Firestore.
+  //   2. Dla każdego zdjęcia wykonujemy fetch() do Firebase Storage i zapisujemy blob do ZIP.
+  //   3. Generujemy plik tekstowy ze streszczeniem wszystkich raportów.
+  //   4. Wywołujemy saveAs() z FileSaver.js, co uruchamia natywne pobieranie pliku.
   document.getElementById('btn-download-zip').addEventListener('click', async () => {
     if (!currentProjectData) return;
-    
+
+    // Blokujemy przycisk na czas pakowania, by zapobiec wielokrotnemu kliknięciu.
     const btn = document.getElementById('btn-download-zip');
     btn.disabled = true;
     btn.textContent = "Trwa pakowanie... ⏳";
@@ -393,28 +533,35 @@
 
     try {
       const zip = new JSZip();
+      // Tworzymy podfolder na zdjęcia, by nie mieszać ich z plikiem tekstowym.
       const folderZdjecia = zip.folder("Zdjecia_z_raportow");
-      
+
+      // Nagłówek raportu tekstowego z metadanymi projektu.
       let textContent = `========================================================\n`;
       textContent += `RAPORT Z POSTĘPU PRAC: ${currentProjectData.name.toUpperCase()}\n`;
       textContent += `Wygenerowano: ${new Date().toLocaleString()}\n`;
       textContent += `========================================================\n\n`;
 
+      // Pobieramy raporty jednorazowo (getDocs), nie w trybie real-time (onSnapshot),
+      // bo potrzebujemy tylko bieżącej migawki danych do wygenerowania ZIP.
       const q = query(collection(db, `projects/${currentUser.uid}/reports`), orderBy("createdAt", "desc"));
       const querySnapshot = await getDocs(q);
 
+      // Numerujemy raporty malejąco (najnowszy = największy numer),
+      // by zachować czytelną kolejność w pliku tekstowym.
       let reportCounter = querySnapshot.size;
       let photoCounter = 1;
 
       for (const docSnapshot of querySnapshot.docs) {
         const r = docSnapshot.data();
         const date = r.createdAt?.toDate().toLocaleString() || 'Brak daty';
-        
+
         textContent += `--- RAPORT #${reportCounter} --------------------------------------\n`;
         textContent += `Data: ${date}\n`;
         textContent += `Autor: ${r.author}\n\n`;
         textContent += `TREŚĆ:\n${r.text || 'Brak wpisu tekstowego.'}\n\n`;
 
+        // Ta sama logika obsługi trzech formatów zdjęć co przy renderowaniu osi czasu.
         let allImages = [];
         if (r.images && r.images.length > 0) {
             allImages = r.images.map(img => img.url);
@@ -426,18 +573,24 @@
 
         if (allImages.length > 0) {
             textContent += `ZAŁĄCZNIKI W TYM RAPORCIE (${allImages.length} szt.):\n`;
-            
+
             for (let url of allImages) {
                 try {
+                    // fetch() na URL Firebase Storage – pobiera plik jako blob binarny.
+                    // Każde zdjęcie jest pobierane sekwencyjnie (await w pętli for...of),
+                    // co jest prostsze i bezpieczniejsze niż Promise.all przy dużej liczbie plików.
                     const response = await fetch(url);
                     const blob = await response.blob();
-                    
+
+                    // Ustandaryzowana nazwa pliku: Raport_N_Zdjecie_M.jpg
                     const fileName = `Raport_${reportCounter}_Zdjecie_${photoCounter}.jpg`;
                     folderZdjecia.file(fileName, blob);
-                    
+
                     textContent += `- Zapisano jako: ${fileName}\n`;
                     photoCounter++;
                 } catch (e) {
+                    // Błąd przy pojedynczym zdjęciu nie przerywa całego pakowania –
+                    // dodajemy notatkę w pliku tekstowym i kontynuujemy.
                     textContent += `- (Błąd) Nie udało się pobrać załącznika z chmury.\n`;
                     console.error("Błąd pobierania zdjęcia do ZIP:", e);
                 }
@@ -447,23 +600,36 @@
         reportCounter--;
       }
 
+      // Dodanie pliku tekstowego z pełnym streszczeniem raportów do archiwum ZIP.
       zip.file("Raport_Tekstowy.txt", textContent);
 
+      // Generowanie finalnego archiwum jako blob i uruchomienie pobierania.
+      // Nazwa pliku jest sanitowana: znaki specjalne zamieniane na "_" dla kompatybilności
+      // z systemami plików Windows, macOS i Linux.
       const content = await zip.generateAsync({ type: "blob" });
       const safeProjectName = currentProjectData.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
       saveAs(content, `Raport_Budowy_${safeProjectName}.zip`);
-      
+
       window.showToast("✓ Paczka gotowa do pobrania!");
     } catch (err) {
       console.error("Błąd generowania ZIP:", err);
       window.showToast("⚠ Wystąpił błąd podczas pakowania archiwum.", "error");
     } finally {
+      // Blok finally gwarantuje odblokowanie przycisku niezależnie od tego,
+      // czy operacja zakończyła się sukcesem czy błędem.
       btn.disabled = false;
       btn.textContent = "📦 Pobierz jako ZIP";
     }
   });
 
+  // ── Funkcje globalne (wywoływane z HTML lub innych miejsc) ────────────────
+
+  // Wylogowanie: signOut() czyści sesję Firebase Auth i przekierowuje na stronę logowania.
   window.logout = function() { signOut(auth).then(() => { window.location.href = 'index.html'; }); };
+
+  // Toast powiadomienie: dodaje klasę "show" na 3,5 sekundy.
+  // clearTimeout zapobiega wielokrotnym powiadomieniom nakładającym się na siebie –
+  // nowy toast restartuje timer, jeśli poprzedni jeszcze nie zniknął.
   window.showToast = function(msg, type) {
     const t = document.getElementById('toast');
     t.textContent = msg;
@@ -471,6 +637,9 @@
     clearTimeout(t._timer);
     t._timer = setTimeout(() => t.classList.remove('show'), 3500);
   };
+
+  // Kopiowanie linku dla wykonawcy do schowka.
+  // Guard przed kopiowaniem placeholder tekstu (gdy projekt jeszcze nie jest zapisany).
   window.copyLink = function() {
     const link = contractorLink.textContent;
     if(link.includes('Zapisz')) return;
